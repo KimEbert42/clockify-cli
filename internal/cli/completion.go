@@ -13,15 +13,16 @@ var completionCmd = &cobra.Command{
 }
 
 func runCompletion(cmd *cobra.Command, args []string) error {
+	root := cmd.Root()
 	switch args[0] {
 	case "bash":
-		return rootCmd.GenBashCompletionV2(cmd.OutOrStdout(), true)
+		return root.GenBashCompletionV2(cmd.OutOrStdout(), true)
 	case "zsh":
-		return rootCmd.GenZshCompletion(cmd.OutOrStdout())
+		return root.GenZshCompletion(cmd.OutOrStdout())
 	case "fish":
-		return rootCmd.GenFishCompletion(cmd.OutOrStdout(), true)
+		return root.GenFishCompletion(cmd.OutOrStdout(), true)
 	case "powershell":
-		return rootCmd.GenPowerShellCompletion(cmd.OutOrStdout())
+		return root.GenPowerShellCompletion(cmd.OutOrStdout())
 	default:
 		return cmd.Help()
 	}

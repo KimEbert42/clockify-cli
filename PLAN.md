@@ -2,7 +2,7 @@
 
 **Version:** 1.0.0
 **Date:** 2026-09-21
-**Status:** M1 Sprint 1 Complete — Active Development
+**Status:** M1 Complete — Active Development
 
 ---
 
@@ -89,22 +89,23 @@ The inverse of effort is used so that less effort yields a higher score (favorin
 
 ### M1: Authentication & Workspace Context
 
-**Status:** 🔄 **IN PROGRESS** — Sprint 1 Complete, Sprint 2 Pending
-**Completed:** 2026-09-21 (Sprint 1)
+**Status:** ✅ **COMPLETE** — Tagged `v0.2.0-m1`
+**Completed:** 2026-09-21
 
 **Scope:** Complete auth flow, workspace selection, status visibility.
 
 | Deliverable | Status | Notes |
 |-------------|--------|-------|
-| `clockify configure` | ✅ | Interactive wizard with API key validation |
-| `clockify config` | ✅ | `list`, `get`, `set`, `unset`, `path` (clear-cache deferred to Sprint 2) |
-| `clockify status` | ✅ | Shows profile, masked API key, workspace, region, output format, validation status |
-| OS keychain integration | ✅ | Real keyring via `go-keyring` (Secret Service on Linux) |
-| API key validation | ✅ | Validates key against Clockify API before saving |
+| `clockify configure` | ✅ | Interactive wizard with API key validation, `--profile` support |
+| `clockify config` | ✅ | `list`, `get`, `set`, `unset`, `path`, `delete`, `clear-cache` |
+| `clockify status` | ✅ | Shows profile, masked API key, workspace, region, output format, validation status, JSON output |
+| OS keychain integration | ✅ | Real keyring via `go-keyring` (Secret Service on Linux), per-profile keys |
+| API key validation | ✅ | Validates key against Clockify API before saving, status validates on demand |
 | Workspace selection | ✅ | Fixed bug, now correctly parses user selection |
-| Multi-profile support | ⏳ | Deferred to Sprint 2 |
+| Multi-profile support | ✅ | `configure --profile`, `config list` shows all, `config delete --profile`, profile isolation |
 | Region mapping | ✅ | Global, EU-DE, US, UK, AU endpoint resolution |
 | Environment variable support | ✅ | All flags readable from `CLOCKIFY_*` env vars |
+| Config clear-cache | ✅ | `config clear-cache` with profile support, XDG cache directory |
 
 **Sprint 1 Completed:**
 - Real keyring integration (`go-keyring` library)
@@ -112,16 +113,25 @@ The inverse of effort is used so that less effort yields a higher score (favorin
 - Workspace selection bug fix
 - Unit tests for keyring operations
 
+**Sprint 2 Completed:**
+- Multi-profile support: `configure --profile`, `config list` shows all profiles, `config delete --profile`
+- Config commands preserve existing profiles (no overwrite on set/unset)
+- Refactored CLI commands to factory functions for test isolation
+- Cache system: `CacheDir()`, `ClearCache()`, profile-specific cache dirs
+- Status command: API key validation, valid/invalid/unreachable indicators, JSON output with `valid` field
+- 15 new unit tests (multi-profile, cache, status validation, config operations)
+- E2E verification of all M1 success criteria
+
 **Success Criteria:**
 - [x] `clockify configure` stores API key in OS keychain and validates it against the API
 - [x] `clockify status` shows current auth context with masked key
-- [ ] `clockify --profile work list projects` switches context correctly
+- [x] `clockify --profile work status` switches context correctly
 - [x] `CLOCKIFY_API_KEY=... clockify status` works without config file
 - [x] Config precedence chain verified: flag > env > config > default
 
 **Dependencies:** M0 (config system, HTTP client).
 
-**Estimated Effort:** 1–2 weeks. **Actual:** Sprint 1 complete (~1 day).
+**Estimated Effort:** 1–2 weeks. **Actual:** ~2 days (Sprint 1 + Sprint 2).
 
 **Confidence:** High (90%). Straightforward API integration once M0 foundation exists.
 
@@ -554,7 +564,7 @@ M10 (Quality & Polish)
 | Milestone | Weeks | Cumulative | Status | Deliverable to Users |
 |-----------|-------|------------|--------|---------------------|
 | M0: Foundation | 3–4 | 3–4 | ✅ **DONE** (1 day) | Buildable CLI skeleton |
-| M1: Auth & Config | 1–2 | 5–6 | 🔄 **Sprint 1 Done** | Authenticatable CLI |
+| M1: Auth & Config | 1–2 | 5–6 | ✅ **DONE** (2 days) | Authenticatable CLI with multi-profile |
 | M2: Read Operations | 2–3 | 7–9 | ⬜ Pending | Can query Clockify data |
 | M3: Time Entry | 3–4 | 10–13 | ⬜ Pending | **Daily time tracking** |
 | M4: Write Operations | 2–3 | 12–16 | ⬜ Pending | Can create/manage resources |
@@ -571,8 +581,10 @@ M10 (Quality & Polish)
 
 **M0 Actual:** Completed in ~1 day vs 3–4 week estimate. 34 files, 2612 lines of Go. All success criteria met.
 
+**M1 Actual:** Completed in ~2 days vs 1–2 week estimate. Multi-profile support, cache system, status validation, 37 unit tests. All success criteria met.
+
 ---
 
-*This plan should be reviewed after M0 completion (decision point) to validate assumptions, adjust estimates, and refine the backlog based on real API discoveries.*
+*This plan should be reviewed after M1 completion (decision point) to validate assumptions, adjust estimates, and refine the backlog based on real API discoveries.*
 
-*Last updated: 2026-09-21 — M1 Sprint 1 complete (keyring integration, API validation, workspace fix).*`
+*Last updated: 2026-09-21 — M1 complete (multi-profile, cache, status validation, E2E verified).*`

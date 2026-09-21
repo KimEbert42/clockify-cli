@@ -16,41 +16,45 @@ func SetBuildInfo(version, commit, date string) {
 	buildDate = date
 }
 
-var rootCmd = &cobra.Command{
-	Use:   "clockify",
-	Short: "A CLI tool for Clockify time tracking",
-	Long: `Clockify CLI - A command-line interface for Clockify time tracking.
+var rootCmd = newRootCmd()
+
+func newRootCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "clockify",
+		Short: "A CLI tool for Clockify time tracking",
+		Long: `Clockify CLI - A command-line interface for Clockify time tracking.
 
 Manage workspaces, projects, time entries, and reports directly from your terminal.
 Supports multiple output formats (table, JSON, CSV, YAML) and shell completion.`,
-	SilenceUsage:  true,
-	SilenceErrors: true,
+		SilenceUsage:  true,
+		SilenceErrors: true,
+	}
+
+	cmd.PersistentFlags().String("profile", "", "config profile to use")
+	cmd.PersistentFlags().String("workspace", "", "workspace ID or name")
+	cmd.PersistentFlags().String("output", "", "output format: table, json, csv, yaml (default: auto-detect)")
+	cmd.PersistentFlags().String("region", "", "API region: global, eu-de, us, uk, au")
+	cmd.PersistentFlags().String("api-key", "", "Clockify API key (overrides config)")
+	cmd.PersistentFlags().Bool("no-color", false, "disable colored output")
+	cmd.PersistentFlags().CountP("verbose", "v", "verbose output (can be repeated for debug)")
+	cmd.PersistentFlags().Bool("quiet", false, "suppress non-essential output")
+	cmd.PersistentFlags().Bool("confirm", false, "skip confirmation prompts")
+	cmd.PersistentFlags().Int("page", 1, "page number for paginated results")
+	cmd.PersistentFlags().Int("page-size", 50, "number of items per page")
+	cmd.PersistentFlags().Bool("no-pagination", false, "fetch all pages automatically")
+
+	cmd.AddCommand(versionCmd)
+	cmd.AddCommand(newConfigCmd())
+	cmd.AddCommand(configureCmd)
+	cmd.AddCommand(statusCmd)
+	cmd.AddCommand(completionCmd)
+	registerAliases(cmd)
+
+	return cmd
 }
 
 func Execute() error {
 	return rootCmd.Execute()
-}
-
-func init() {
-	rootCmd.PersistentFlags().String("profile", "", "config profile to use")
-	rootCmd.PersistentFlags().String("workspace", "", "workspace ID or name")
-	rootCmd.PersistentFlags().String("output", "", "output format: table, json, csv, yaml (default: auto-detect)")
-	rootCmd.PersistentFlags().String("region", "", "API region: global, eu-de, us, uk, au")
-	rootCmd.PersistentFlags().String("api-key", "", "Clockify API key (overrides config)")
-	rootCmd.PersistentFlags().Bool("no-color", false, "disable colored output")
-	rootCmd.PersistentFlags().CountP("verbose", "v", "verbose output (can be repeated for debug)")
-	rootCmd.PersistentFlags().Bool("quiet", false, "suppress non-essential output")
-	rootCmd.PersistentFlags().Bool("confirm", false, "skip confirmation prompts")
-	rootCmd.PersistentFlags().Int("page", 1, "page number for paginated results")
-	rootCmd.PersistentFlags().Int("page-size", 50, "number of items per page")
-	rootCmd.PersistentFlags().Bool("no-pagination", false, "fetch all pages automatically")
-
-	rootCmd.AddCommand(versionCmd)
-	rootCmd.AddCommand(configCmd)
-	rootCmd.AddCommand(configureCmd)
-	rootCmd.AddCommand(statusCmd)
-	rootCmd.AddCommand(completionCmd)
-	registerAliases(rootCmd)
 }
 
 var versionCmd = &cobra.Command{

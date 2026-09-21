@@ -1,6 +1,7 @@
 package config
 
 import (
+	"fmt"
 	"os"
 
 	"github.com/spf13/viper"
@@ -127,6 +128,52 @@ func MergeFlags(cfg *Config, flags map[string]interface{}) *Config {
 		result.Output = v
 	}
 	return &result
+}
+
+func LoadRaw() (*ProfileConfig, error) {
+	if _, err := os.Stat(ConfigPath()); err != nil {
+		return &ProfileConfig{Version: 1, Default: defaults, Profiles: make(map[string]Config)}, nil
+	}
+	data, err := os.ReadFile(ConfigPath())
+	if err != nil {
+		return nil, fmt.Errorf("failed to read config: %w", err)
+	}
+	var pc ProfileConfig
+	if err := yaml.Unmarshal(data, &pc); err != nil {
+		return nil, fmt.Errorf("failed to parse config: %w", err)
+	}
+	if pc.Profiles == nil {
+		pc.Profiles = make(map[string]Config)
+	}
+	return &pc, nil
+}
+
+func LoadProfileNames() ([]string, error) {
+	pc, err := LoadRaw()
+	if err != nil {
+		return nil, err
+	}
+	names := make([]string, 0, len(pc.Profiles)+1)
+	names = append(names, "default")
+	for name := range pc.Profiles {
+		names = append(names, name)
+	}
+	return names, nil
+}
+
+func DeleteProfile(name string) error {
+	if name == "default" {
+		return fmt.Errorf("cannot delete the default profile")
+	}
+	pc, err := LoadRaw()
+	if err != nil {
+		return err
+	}
+	if _, ok := pc.Profiles[name]; !ok {
+		return fmt.Errorf("profile %q does not exist", name)
+	}
+	delete(pc.Profiles, name)
+	return Save(pc)
 }
 
 func FileExists() bool {

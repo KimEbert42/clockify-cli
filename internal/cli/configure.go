@@ -21,6 +21,11 @@ var configureCmd = &cobra.Command{
 }
 
 func runConfigure(cmd *cobra.Command, args []string) error {
+	profile, _ := cmd.Flags().GetString("profile")
+	if profile == "" {
+		profile = "default"
+	}
+
 	reader := bufio.NewReader(os.Stdin)
 
 	fmt.Print("Enter your Clockify API key: ")
@@ -84,22 +89,34 @@ func runConfigure(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	if err := config.SetAPIKey("", apiKey); err != nil {
+	if err := config.SetAPIKey(profile, apiKey); err != nil {
 		return fmt.Errorf("failed to store API key: %w", err)
 	}
 
-	cfg := &config.ProfileConfig{
-		Version: 1,
-		Default: config.Config{
-			Region:      region,
-			WorkspaceID: workspaceID,
-		},
+	pc, err := config.LoadRaw()
+	if err != nil {
+		return fmt.Errorf("failed to load existing config: %w", err)
 	}
-	if err := config.Save(cfg); err != nil {
+
+	newCfg := config.Config{
+		Region:      region,
+		WorkspaceID: workspaceID,
+	}
+
+	if profile == "default" {
+		pc.Default = newCfg
+	} else {
+		if pc.Profiles == nil {
+			pc.Profiles = make(map[string]config.Config)
+		}
+		pc.Profiles[profile] = newCfg
+	}
+
+	if err := config.Save(pc); err != nil {
 		return fmt.Errorf("failed to save config: %w", err)
 	}
 
-	fmt.Println("\nConfiguration saved successfully!")
+	fmt.Printf("\nConfiguration saved successfully! (profile: %s)\n", profile)
 	fmt.Printf("  Region:    %s\n", region)
 	fmt.Printf("  Workspace: %s\n", workspaceID)
 	return nil
