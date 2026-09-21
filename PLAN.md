@@ -2,7 +2,7 @@
 
 **Version:** 1.0.0
 **Date:** 2026-09-21
-**Status:** M0 Complete — Active Development
+**Status:** M1 Sprint 1 Complete — Active Development
 
 ---
 
@@ -89,27 +89,39 @@ The inverse of effort is used so that less effort yields a higher score (favorin
 
 ### M1: Authentication & Workspace Context
 
+**Status:** 🔄 **IN PROGRESS** — Sprint 1 Complete, Sprint 2 Pending
+**Completed:** 2026-09-21 (Sprint 1)
+
 **Scope:** Complete auth flow, workspace selection, status visibility.
 
-| Deliverable | Description |
-|-------------|-------------|
-| `clockify configure` | Interactive wizard: API key prompt, auto-detect workspace, region selection, output preference |
-| `clockify config` | `list`, `get`, `set`, `unset`, `path`, `clear-cache` |
-| `clockify status` | Display profile, masked API key, workspace, region, output format |
-| Multi-profile support | Named profiles (work, personal), `--profile` flag switching |
-| Region mapping | Global, EU-DE, US, UK, AU endpoint resolution |
-| Environment variable support | All flags readable from `CLOCKIFY_*` env vars |
+| Deliverable | Status | Notes |
+|-------------|--------|-------|
+| `clockify configure` | ✅ | Interactive wizard with API key validation |
+| `clockify config` | ✅ | `list`, `get`, `set`, `unset`, `path` (clear-cache deferred to Sprint 2) |
+| `clockify status` | ✅ | Shows profile, masked API key, workspace, region, output format, validation status |
+| OS keychain integration | ✅ | Real keyring via `go-keyring` (Secret Service on Linux) |
+| API key validation | ✅ | Validates key against Clockify API before saving |
+| Workspace selection | ✅ | Fixed bug, now correctly parses user selection |
+| Multi-profile support | ⏳ | Deferred to Sprint 2 |
+| Region mapping | ✅ | Global, EU-DE, US, UK, AU endpoint resolution |
+| Environment variable support | ✅ | All flags readable from `CLOCKIFY_*` env vars |
+
+**Sprint 1 Completed:**
+- Real keyring integration (`go-keyring` library)
+- API key validation in `configure` command
+- Workspace selection bug fix
+- Unit tests for keyring operations
 
 **Success Criteria:**
-- `clockify configure` stores API key in OS keychain and validates it against the API
-- `clockify status` shows current auth context with masked key
-- `clockify --profile work list projects` switches context correctly
-- `CLOCKIFY_API_KEY=... clockify status` works without config file
-- Config precedence chain verified: flag > env > config > default
+- [x] `clockify configure` stores API key in OS keychain and validates it against the API
+- [x] `clockify status` shows current auth context with masked key
+- [ ] `clockify --profile work list projects` switches context correctly
+- [x] `CLOCKIFY_API_KEY=... clockify status` works without config file
+- [x] Config precedence chain verified: flag > env > config > default
 
 **Dependencies:** M0 (config system, HTTP client).
 
-**Estimated Effort:** 1–2 weeks.
+**Estimated Effort:** 1–2 weeks. **Actual:** Sprint 1 complete (~1 day).
 
 **Confidence:** High (90%). Straightforward API integration once M0 foundation exists.
 
@@ -542,7 +554,7 @@ M10 (Quality & Polish)
 | Milestone | Weeks | Cumulative | Status | Deliverable to Users |
 |-----------|-------|------------|--------|---------------------|
 | M0: Foundation | 3–4 | 3–4 | ✅ **DONE** (1 day) | Buildable CLI skeleton |
-| M1: Auth & Config | 1–2 | 5–6 | ⏳ Next | Authenticatable CLI |
+| M1: Auth & Config | 1–2 | 5–6 | 🔄 **Sprint 1 Done** | Authenticatable CLI |
 | M2: Read Operations | 2–3 | 7–9 | ⬜ Pending | Can query Clockify data |
 | M3: Time Entry | 3–4 | 10–13 | ⬜ Pending | **Daily time tracking** |
 | M4: Write Operations | 2–3 | 12–16 | ⬜ Pending | Can create/manage resources |
@@ -563,4 +575,4 @@ M10 (Quality & Polish)
 
 *This plan should be reviewed after M0 completion (decision point) to validate assumptions, adjust estimates, and refine the backlog based on real API discoveries.*
 
-*Last updated: 2026-09-21 — M0 complete, moving to M1.*
+*Last updated: 2026-09-21 — M1 Sprint 1 complete (keyring integration, API validation, workspace fix).*`

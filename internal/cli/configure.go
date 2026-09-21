@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/kim/clockify-cli/internal/api"
@@ -42,6 +43,13 @@ func runConfigure(cmd *cobra.Command, args []string) error {
 		region = "global"
 	}
 
+	fmt.Println("Validating API key...")
+	user, err := validateAPIKey(apiKey, region)
+	if err != nil {
+		return fmt.Errorf("API key validation failed: %w", err)
+	}
+	fmt.Printf("  Authenticated as: %s (%s)\n", user["name"], user["email"])
+
 	fmt.Print("Enter workspace ID (or leave empty to auto-detect): ")
 	workspaceID, err := reader.ReadString('\n')
 	if err != nil {
@@ -63,14 +71,16 @@ func runConfigure(cmd *cobra.Command, args []string) error {
 				fmt.Printf("  %d. %s (%s)\n", i+1, ws["name"], ws["id"])
 			}
 			fmt.Print("Select workspace number [1]: ")
-		_choice, _ := reader.ReadString('\n')
-			choice := strings.TrimSpace(_choice)
-			if choice == "" {
-				choice = "1"
+			choiceStr, _ := reader.ReadString('\n')
+			choiceStr = strings.TrimSpace(choiceStr)
+			if choiceStr == "" {
+				choiceStr = "1"
 			}
-			if len(workspaces) > 0 {
-				workspaceID = workspaces[0]["id"].(string)
+			choice, err := strconv.Atoi(choiceStr)
+			if err != nil || choice < 1 || choice > len(workspaces) {
+				return fmt.Errorf("invalid workspace selection: %s", choiceStr)
 			}
+			workspaceID = workspaces[choice-1]["id"].(string)
 		}
 	}
 
@@ -81,7 +91,7 @@ func runConfigure(cmd *cobra.Command, args []string) error {
 	cfg := &config.ProfileConfig{
 		Version: 1,
 		Default: config.Config{
-			Region:     region,
+			Region:      region,
 			WorkspaceID: workspaceID,
 		},
 	}
@@ -93,6 +103,16 @@ func runConfigure(cmd *cobra.Command, args []string) error {
 	fmt.Printf("  Region:    %s\n", region)
 	fmt.Printf("  Workspace: %s\n", workspaceID)
 	return nil
+}
+
+func validateAPIKey(apiKey, region string) (map[string]any, error) {
+	client := api.NewClient(apiKey, api.BaseURL(region), "")
+	var user map[string]any
+	err := client.Do(context.Background(), "GET", "/user", nil, &user)
+	if err != nil {
+		return nil, err
+	}
+	return user, nil
 }
 
 func fetchWorkspaces(apiKey, region string) ([]map[string]any, error) {

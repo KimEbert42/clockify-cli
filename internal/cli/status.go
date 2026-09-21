@@ -26,18 +26,28 @@ func runStatus(cmd *cobra.Command, args []string) error {
 	}
 
 	maskedKey := maskAPIKey(apiKey)
+	validStatus := "Unknown"
+	if apiKey != "(not configured)" && apiKey != "" {
+		if _, err := validateAPIKey(apiKey, cfg.Region); err != nil {
+			validStatus = "Invalid"
+		} else {
+			validStatus = "Valid"
+		}
+	}
 
 	output := fmt.Sprintf(`Profile:    %s
 API Key:    %s
 Workspace:  %s
 Region:     %s
 Output:     %s
+Valid:      %s
 Config:     %s`,
 		profileOrDefault(profile),
 		maskedKey,
 		cfg.WorkspaceID,
 		cfg.Region,
 		cfg.Output,
+		validStatus,
 		config.ConfigPath(),
 	)
 

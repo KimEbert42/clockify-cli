@@ -3,6 +3,8 @@ package config
 import (
 	"fmt"
 	"os"
+
+	"github.com/zalando/go-keyring"
 )
 
 const (
@@ -49,17 +51,17 @@ func DeleteAPIKey(profile string) error {
 }
 
 func getKeyring(key string) (string, error) {
-	val := os.Getenv("CLOCKIFY_API_KEY")
-	if val != "" {
-		return val, nil
+	val, err := keyring.Get(keyringService, key)
+	if err != nil {
+		return "", err
 	}
-	return "", fmt.Errorf("keyring not available")
+	return val, nil
 }
 
 func setKeyring(key, value string) error {
-	return os.Setenv("CLOCKIFY_API_KEY", value)
+	return keyring.Set(keyringService, key, value)
 }
 
 func deleteKeyring(key string) error {
-	return os.Unsetenv("CLOCKIFY_API_KEY")
+	return keyring.Delete(keyringService, key)
 }
