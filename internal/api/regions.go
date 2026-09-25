@@ -1,5 +1,7 @@
 package api
 
+import "os"
+
 type Region struct {
 	Name     string
 	Host     string
@@ -22,6 +24,9 @@ func GetRegion(name string) Region {
 }
 
 func BaseURL(region string) string {
+	if url := os.Getenv("CLOCKIFY_API_URL"); url != "" {
+		return url
+	}
 	r := GetRegion(region)
 	return "https://" + r.Host + r.APIPath
 }

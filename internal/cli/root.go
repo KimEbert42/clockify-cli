@@ -48,6 +48,8 @@ Supports multiple output formats (table, JSON, CSV, YAML) and shell completion.`
 	cmd.AddCommand(configureCmd)
 	cmd.AddCommand(statusCmd)
 	cmd.AddCommand(completionCmd)
+	cmd.AddCommand(newWorkspaceCmd())
+	cmd.AddCommand(newUserCmd())
 	registerAliases(cmd)
 
 	return cmd

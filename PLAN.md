@@ -2,7 +2,7 @@
 
 **Version:** 1.0.0
 **Date:** 2026-09-21
-**Status:** M1 Complete — Active Development
+**Status:** M2 Active — Active Development
 
 ---
 
@@ -565,7 +565,7 @@ M10 (Quality & Polish)
 |-----------|-------|------------|--------|---------------------|
 | M0: Foundation | 3–4 | 3–4 | ✅ **DONE** (1 day) | Buildable CLI skeleton |
 | M1: Auth & Config | 1–2 | 5–6 | ✅ **DONE** (2 days) | Authenticatable CLI with multi-profile |
-| M2: Read Operations | 2–3 | 7–9 | ⬜ Pending | Can query Clockify data |
+| M2: Read Operations | 2–3 | 7–9 | 🔵 **ACTIVE** | Can query Clockify data |
 | M3: Time Entry | 3–4 | 10–13 | ⬜ Pending | **Daily time tracking** |
 | M4: Write Operations | 2–3 | 12–16 | ⬜ Pending | Can create/manage resources |
 | M5: Tasks | 1 | 13–17 | ⬜ Pending | Task management |
@@ -583,8 +583,10 @@ M10 (Quality & Polish)
 
 **M1 Actual:** Completed in ~2 days vs 1–2 week estimate. Multi-profile support, cache system, status validation, 37 unit tests. All success criteria met.
 
+**M2 Sprint 1 Actual:** Completed in ~1 day. Entity types defined, typed API methods, workspace list/get commands, user get/list/info commands, 21 new tests. All success criteria met.
+
 ---
 
 *This plan should be reviewed after M1 completion (decision point) to validate assumptions, adjust estimates, and refine the backlog based on real API discoveries.*
 
-*Last updated: 2026-09-21 — M1 complete (multi-profile, cache, status validation, E2E verified).*`
+*Last updated: 2026-09-25 — M2 Sprint 1 complete (workspace/user commands, entity types, typed API methods). Sprint 2 pending (project/client/tag + pagination).*`
