@@ -53,6 +53,7 @@ Supports multiple output formats (table, JSON, CSV, YAML) and shell completion.`
 	cmd.AddCommand(newProjectCmd())
 	cmd.AddCommand(newClientCmd())
 	cmd.AddCommand(newTagCmd())
+	cmd.AddCommand(newTimeEntryCmd())
 	registerAliases(cmd)
 
 	return cmd

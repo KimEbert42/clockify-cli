@@ -2,7 +2,7 @@
 
 **Version:** 1.0.0
 **Date:** 2026-09-21
-**Status:** M3 Pending — M2 Complete
+**Status:** M3 Complete — M4 Pending
 
 ---
 
@@ -223,6 +223,36 @@ The inverse of effort is used so that less effort yields a higher score (favorin
 **Estimated Effort:** 3–4 weeks (highest complexity — timer state, duration parsing, filtering).
 
 **Confidence:** Medium-High (80%). Timer state management and duration parsing have moderate complexity.
+
+**Status:** ✅ **COMPLETE** — Tagged `v0.4.0-m3`
+**Completed:** 2026-09-29
+
+| Deliverable | Status | Notes |
+|-------------|--------|-------|
+| `clockify time-entry list` | ✅ | With date ranges, project/task/description/tag filters, --in-progress |
+| `clockify time-entry get` | ✅ | By ID, with --hydrated flag |
+| `clockify time-entry create` | ✅ | With start+duration or start+end; duration formats: 1h, 1.5h, 30m, 1h30m |
+| `clockify time-entry update` | ✅ | Partial updates for description, project, start, duration |
+| `clockify time-entry delete` | ✅ | With confirmation prompt, --confirm to skip |
+| `clockify time-entry start` | ✅ | Starts timer, detects conflicts |
+| `clockify time-entry stop` | ✅ | Stops running timer, shows duration |
+| `clockify time-entry bulk` | ✅ | Bulk create from JSON file or stdin |
+| Relative date parsing | ✅ | today, yesterday, this-week, last-week, this-month, last-month |
+| `--hydrated` flag | ✅ | On list and get commands |
+| `--in-progress` flag | ✅ | Filter to only running entries |
+| Duration parser | ✅ | pkg/duration: Parse() and Format() |
+| API methods | ✅ | ListTimeEntries, GetTimeEntry, CreateTimeEntry, UpdateTimeEntry, DeleteTimeEntry, GetTimeEntryInProgress, StopTimeEntry, BatchGetTimeEntries |
+| Unit tests | ✅ | 25+ new tests across duration, API, and CLI packages |
+
+**Success Criteria:**
+- [x] `clockify time-entry start --project X` starts a timer; `clockify time-entry stop` stops it
+- [x] Duration parsing handles all formats: seconds, `1h`, `1.5h`, `30m`, `1h30m`
+- [x] `clockify time-entry list --start today --end today` returns today's entries
+- [x] `--output json | jq` pipeline works for scripting
+- [x] Bulk create from JSON file processes all entries
+- [x] Confirmation required for delete; `--confirm` skips it
+
+**Actual Effort:** ~1 day (3 sprints compressed).
 
 ---
 
@@ -587,7 +617,7 @@ M10 (Quality & Polish)
 | M0: Foundation | 3–4 | 3–4 | ✅ **DONE** (1 day) | Buildable CLI skeleton |
 | M1: Auth & Config | 1–2 | 5–6 | ✅ **DONE** (2 days) | Authenticatable CLI with multi-profile |
 | M2: Read Operations | 2–3 | 7–9 | ✅ **DONE** (3 days) | Can query Clockify data |
-| M3: Time Entry | 3–4 | 10–13 | ⬜ Pending | **Daily time tracking** |
+| M3: Time Entry | 3–4 | 10–13 | ✅ **DONE** (1 day) | **Daily time tracking** |
 | M4: Write Operations | 2–3 | 12–16 | ⬜ Pending | Can create/manage resources |
 | M5: Tasks | 1 | 13–17 | ⬜ Pending | Task management |
 | M6: Reports | 2–3 | 15–20 | ⬜ Pending | Time reports & export |
@@ -608,8 +638,10 @@ M10 (Quality & Polish)
 
 **M2 Sprint 2 Actual:** Completed in ~2 days. Project/client/tag list/get commands, pagination infrastructure (DoWithPagination, fetchPaginated helpers), 20 new tests. 98 total tests passing. All success criteria met.
 
+**M3 Actual:** Completed in ~1 day. Duration parser (Parse/Format), relative date parser, time entry API methods (list, get, create, update, delete, start, stop, bulk, batch), all CLI commands (list, get, create, update, delete, start, stop, bulk), --hydrated flag, --in-progress filter, 25+ new tests. 123 total tests passing. All success criteria met.
+
 ---
 
 *This plan should be reviewed after M1 completion (decision point) to validate assumptions, adjust estimates, and refine the backlog based on real API discoveries.*
 
-*Last updated: 2026-09-29 — M2 complete (all read operations, pagination, 98 tests passing). M3 (Time Entry) is next.*``
+*Last updated: 2026-09-29 — M3 complete (time entry CRUD, timer operations, duration parsing, 123 tests passing). M4 (Write Operations) is next.*`

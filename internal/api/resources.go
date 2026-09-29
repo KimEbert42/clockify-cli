@@ -34,6 +34,44 @@ type ListUsersOpts struct {
 	PageSize int
 }
 
+type ListTimeEntriesOpts struct {
+	Start       string
+	End         string
+	ProjectID   string
+	TaskID      string
+	Tags        string
+	Description string
+	InProgress  string
+	Hydrated    bool
+	Page        int
+	PageSize    int
+}
+
+type CreateTimeEntryRequest struct {
+	Start       string   `json:"start"`
+	End         string   `json:"end,omitempty"`
+	ProjectID   string   `json:"projectId,omitempty"`
+	TaskID      string   `json:"taskId,omitempty"`
+	Description string   `json:"description,omitempty"`
+	Billable    bool     `json:"billable"`
+	TagIDs      []string `json:"tagIds,omitempty"`
+	Type        string   `json:"type,omitempty"`
+}
+
+type UpdateTimeEntryRequest struct {
+	Start       string   `json:"start"`
+	End         string   `json:"end,omitempty"`
+	ProjectID   string   `json:"projectId,omitempty"`
+	TaskID      string   `json:"taskId,omitempty"`
+	Description string   `json:"description,omitempty"`
+	Billable    bool     `json:"billable"`
+	TagIDs      []string `json:"tagIds,omitempty"`
+}
+
+type StopTimerRequest struct {
+	End string `json:"end"`
+}
+
 func (c *ClockifyClient) ListWorkspaces(ctx context.Context) ([]clockify.Workspace, error) {
 	var workspaces []clockify.Workspace
 	err := c.Do(ctx, "GET", "/workspaces", nil, &workspaces)
@@ -120,6 +158,91 @@ func (c *ClockifyClient) ListTags(ctx context.Context, opts ListTagsOpts) ([]clo
 	return tags, err
 }
 
+func (c *ClockifyClient) ListTimeEntries(ctx context.Context, userID string, opts ListTimeEntriesOpts) ([]clockify.TimeEntry, error) {
+	path := fmt.Sprintf("/workspaces/%s/user/%s/time-entries", c.workspaceID, userID)
+	path = appendQueryParams(path, map[string]string{
+		"start":       opts.Start,
+		"end":         opts.End,
+		"project":     opts.ProjectID,
+		"task":        opts.TaskID,
+		"tags":        opts.Tags,
+		"description": opts.Description,
+		"in-progress": opts.InProgress,
+		"page":        strconv.Itoa(opts.Page),
+		"pageSize":    strconv.Itoa(opts.PageSize),
+	})
+
+	var entries []clockify.TimeEntry
+	err := c.Do(ctx, "GET", path, nil, &entries)
+	return entries, err
+}
+
+func (c *ClockifyClient) ListTimeEntriesWithPagination(ctx context.Context, userID string, opts ListTimeEntriesOpts) ([]clockify.TimeEntry, *clockify.PageInfo, error) {
+	path := fmt.Sprintf("/workspaces/%s/user/%s/time-entries?%s", c.workspaceID, userID, buildTimeEntryQueryParams(opts))
+	pageInfo, err := c.DoWithPagination(ctx, "GET", path, nil, nil)
+	if err != nil {
+		return nil, nil, err
+	}
+	entries, err := c.ListTimeEntries(ctx, userID, opts)
+	return entries, pageInfo, err
+}
+
+func (c *ClockifyClient) GetTimeEntry(ctx context.Context, id string) (*clockify.TimeEntry, error) {
+	path := fmt.Sprintf("/workspaces/%s/time-entries/%s", c.workspaceID, id)
+	var entry clockify.TimeEntry
+	err := c.Do(ctx, "GET", path, nil, &entry)
+	return &entry, err
+}
+
+func (c *ClockifyClient) GetTimeEntryInProgress(ctx context.Context, userID string) ([]clockify.TimeEntry, error) {
+	path := fmt.Sprintf("/workspaces/%s/time-entries/status/in-progress", c.workspaceID)
+	var entries []clockify.TimeEntry
+	err := c.Do(ctx, "GET", path, nil, &entries)
+	return entries, err
+}
+
+func (c *ClockifyClient) BatchGetTimeEntries(ctx context.Context, ids []string, hydrated bool) ([]clockify.TimeEntry, error) {
+	path := fmt.Sprintf("/workspaces/%s/time-entries/batch", c.workspaceID)
+	body := map[string]interface{}{
+		"timeEntryIds": ids,
+		"hydrated":     hydrated,
+	}
+	var entries []clockify.TimeEntry
+	err := c.Do(ctx, "POST", path, body, &entries)
+	return entries, err
+}
+
+func (c *ClockifyClient) CreateTimeEntry(ctx context.Context, req CreateTimeEntryRequest) (*clockify.TimeEntry, error) {
+	path := fmt.Sprintf("/workspaces/%s/time-entries", c.workspaceID)
+	var entry clockify.TimeEntry
+	err := c.Do(ctx, "POST", path, req, &entry)
+	return &entry, err
+}
+
+func (c *ClockifyClient) UpdateTimeEntry(ctx context.Context, id string, req UpdateTimeEntryRequest) (*clockify.TimeEntry, error) {
+	path := fmt.Sprintf("/workspaces/%s/time-entries/%s", c.workspaceID, id)
+	var entry clockify.TimeEntry
+	err := c.Do(ctx, "PUT", path, req, &entry)
+	return &entry, err
+}
+
+func (c *ClockifyClient) DeleteTimeEntry(ctx context.Context, id string) error {
+	path := fmt.Sprintf("/workspaces/%s/time-entries/%s", c.workspaceID, id)
+	return c.Do(ctx, "DELETE", path, nil, nil)
+}
+
+func (c *ClockifyClient) StopTimeEntry(ctx context.Context, userID string, req StopTimerRequest) error {
+	path := fmt.Sprintf("/workspaces/%s/user/%s/time-entries", c.workspaceID, userID)
+	return c.Do(ctx, "PATCH", path, req, nil)
+}
+
+func (c *ClockifyClient) BulkUpdateTimeEntries(ctx context.Context, userID string, entries []UpdateTimeEntryRequest) ([]clockify.TimeEntry, error) {
+	path := fmt.Sprintf("/workspaces/%s/user/%s/time-entries", c.workspaceID, userID)
+	var result []clockify.TimeEntry
+	err := c.Do(ctx, "PUT", path, entries, &result)
+	return result, err
+}
+
 func appendQueryParams(path string, params map[string]string) string {
 	first := true
 	for k, v := range params {
@@ -135,4 +258,39 @@ func appendQueryParams(path string, params map[string]string) string {
 		path += k + "=" + v
 	}
 	return path
+}
+
+func buildTimeEntryQueryParams(opts ListTimeEntriesOpts) string {
+	params := ""
+	if opts.Start != "" {
+		params += "start=" + opts.Start + "&"
+	}
+	if opts.End != "" {
+		params += "end=" + opts.End + "&"
+	}
+	if opts.ProjectID != "" {
+		params += "project=" + opts.ProjectID + "&"
+	}
+	if opts.TaskID != "" {
+		params += "task=" + opts.TaskID + "&"
+	}
+	if opts.Tags != "" {
+		params += "tags=" + opts.Tags + "&"
+	}
+	if opts.Description != "" {
+		params += "description=" + opts.Description + "&"
+	}
+	if opts.InProgress != "" {
+		params += "in-progress=" + opts.InProgress + "&"
+	}
+	if opts.Page > 0 {
+		params += fmt.Sprintf("page=%d&", opts.Page)
+	}
+	if opts.PageSize > 0 {
+		params += fmt.Sprintf("pageSize=%d&", opts.PageSize)
+	}
+	if len(params) > 0 && params[len(params)-1] == '&' {
+		params = params[:len(params)-1]
+	}
+	return params
 }
