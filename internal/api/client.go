@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/kim/clockify-cli/internal/errors"
+	"github.com/kim/clockify-cli/pkg/clockify"
 )
 
 type ClockifyClient struct {
@@ -155,4 +156,80 @@ func (c *ClockifyClient) handleErrorResponse(resp *http.Response) error {
 
 func (c *ClockifyClient) WorkspaceID() string {
 	return c.workspaceID
+}
+
+func (c *ClockifyClient) DoWithPagination(ctx context.Context, method, path string, body any, result any) (*clockify.PageInfo, error) {
+	var bodyReader io.Reader
+	if body != nil {
+		jsonBytes, err := json.Marshal(body)
+		if err != nil {
+			return nil, errors.Wrap(errors.E010Internal, "failed to marshal request body", err)
+		}
+		bodyReader = bytes.NewReader(jsonBytes)
+	}
+
+	url := c.baseURL + path
+	req, err := http.NewRequestWithContext(ctx, method, url, bodyReader)
+	if err != nil {
+		return nil, errors.Wrap(errors.E010Internal, "failed to create request", err)
+	}
+
+	req.Header.Set("X-Api-Key", c.apiKey)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json")
+
+	if c.verbose {
+		fmt.Printf(">>> %s %s\n", method, url)
+	}
+
+	var lastErr error
+	for attempt := 0; attempt <= c.retryPolicy.MaxRetries; attempt++ {
+		c.rateLimiter.Take()
+
+		resp, err := c.httpClient.Do(req)
+		if err != nil {
+			lastErr = err
+			if c.retryPolicy.RetryableFn(0, err) && attempt < c.retryPolicy.MaxRetries {
+				time.Sleep(c.retryPolicy.Delay(attempt))
+				continue
+			}
+			return nil, errors.Wrap(errors.E006Network, "request failed", err)
+		}
+
+		defer resp.Body.Close()
+
+		if c.debug {
+			fmt.Printf("<<< %d %s\n", resp.StatusCode, resp.Status)
+		}
+
+		if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+			if result != nil && resp.StatusCode != 204 {
+				respBody, err := io.ReadAll(resp.Body)
+				if err != nil {
+					return nil, errors.Wrap(errors.E010Internal, "failed to read response body", err)
+				}
+				if err := json.Unmarshal(respBody, result); err != nil {
+					return nil, errors.Wrap(errors.E010Internal, "failed to unmarshal response", err)
+				}
+			}
+
+			pageInfo := &clockify.PageInfo{}
+			if tp := resp.Header.Get("X-Pagination-Total-Pages"); tp != "" {
+				fmt.Sscanf(tp, "%d", &pageInfo.TotalPages)
+			}
+			if tr := resp.Header.Get("X-Pagination-Total-Results"); tr != "" {
+				fmt.Sscanf(tr, "%d", &pageInfo.TotalResults)
+			}
+			return pageInfo, nil
+		}
+
+		if c.retryPolicy.RetryableFn(resp.StatusCode, nil) && attempt < c.retryPolicy.MaxRetries {
+			time.Sleep(c.retryPolicy.Delay(attempt))
+			continue
+		}
+
+		return nil, c.handleErrorResponse(resp)
+	}
+
+	return nil, errors.Wrap(errors.E006Network, "max retries exceeded", lastErr)
 }

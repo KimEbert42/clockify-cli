@@ -2,7 +2,7 @@
 
 **Version:** 1.0.0
 **Date:** 2026-09-21
-**Status:** M2 Active — Active Development
+**Status:** M3 Pending — M2 Complete
 
 ---
 
@@ -139,32 +139,53 @@ The inverse of effort is used so that less effort yields a higher score (favorin
 
 ### M2: Read Operations — Workspace, User, Project, Client, Tag
 
+**Status:** ✅ **COMPLETE** — Tagged `v0.3.0-m2`
+**Completed:** 2026-09-29
+
 **Scope:** List and get operations for the core entity types. This gives users visibility into their Clockify data.
 
-| Deliverable | Description |
-|-------------|-------------|
-| `clockify workspace list` | List all workspaces for authenticated user |
-| `clockify workspace get` | Get workspace by ID or name |
-| `clockify user get` | Current user profile |
-| `clockify user list` | List workspace users with status filter |
-| `clockify user info` | Search by email/name |
-| `clockify project list` | List projects with filters (status, client, search) |
-| `clockify project get` | Get project by ID or name |
-| `clockify client list` | List clients with search |
-| `clockify client get` | Get client by ID or name |
-| `clockify tag list` | List tags with search |
-| Pagination support | `--page`, `--page-size`, `--no-pagination` flags working across all list commands |
+| Deliverable | Status | Notes |
+|-------------|--------|-------|
+| `clockify workspace list` | ✅ | |
+| `clockify workspace get` | ✅ | By ID, by name (fuzzy match) |
+| `clockify user get` | ✅ | Current user profile |
+| `clockify user list` | ✅ | Status filter |
+| `clockify user info` | ✅ | Search by email/name |
+| `clockify project list` | ✅ | `--status`, `--client`, `--search` filters |
+| `clockify project get` | ✅ | By ID, by name (fuzzy match) |
+| `clockify client list` | ✅ | `--search` filter |
+| `clockify client get` | ✅ | By ID |
+| `clockify tag list` | ✅ | `--search` filter |
+| Pagination support | ✅ | `--page`, `--page-size`, `--no-pagination` flags working across all list commands |
+
+**Sprint 1 Completed:**
+- Entity types defined (Workspace, User, Project, Client, Tag)
+- Typed API methods (ListWorkspaces, GetWorkspace, GetCurrentUser, ListUsers, ListProjects, GetProject, ListClients, GetClient, ListTags)
+- Workspace list/get commands with name resolution
+- User get/list/info commands with email/name search
+- 21 new tests
+
+**Sprint 2 Completed:**
+- Project list/get commands with status/client/search filters and name resolution
+- Client list/get commands with search filter
+- Tag list command with search filter
+- `PageInfo` struct for pagination metadata
+- `DoWithPagination()` client method (reads X-Pagination-Total-Pages/Results headers)
+- `fetchPaginated*()` helpers for auto-fetching all pages
+- Pagination summary in table mode (suppressed for JSON/CSV/YAML)
+- `lp` alias for `project list`
+- 20 new tests (project, client, tag, pagination)
 
 **Success Criteria:**
-- All list commands return correctly formatted output in all formats
-- Filters work correctly (e.g., `--status ACTIVE`, `--search "web"`)
-- Pagination auto-fetches all pages with `--no-pagination`
-- Name resolution works: `clockify project get --name "Website"` finds the right project
-- Fuzzy matching warns on multiple matches and suggests `--id`
+- [x] All list commands return correctly formatted output in all formats
+- [x] Filters work correctly (e.g., `--status ACTIVE`, `--search "web"`)
+- [x] Pagination auto-fetches all pages with `--no-pagination`
+- [x] Name resolution works: `clockify project get --name "Website"` finds the right project
+- [x] Fuzzy matching warns on multiple matches and suggests `--id`
 
 **Dependencies:** M0 (HTTP client, output formatting), M1 (auth context).
 
-**Estimated Effort:** 2–3 weeks.
+**Estimated Effort:** 2–3 weeks. **Actual:** ~3 days (Sprint 1 + Sprint 2).
 
 **Confidence:** High (85%). Read operations are lower risk; mainly mapping API responses to output formats.
 
@@ -565,7 +586,7 @@ M10 (Quality & Polish)
 |-----------|-------|------------|--------|---------------------|
 | M0: Foundation | 3–4 | 3–4 | ✅ **DONE** (1 day) | Buildable CLI skeleton |
 | M1: Auth & Config | 1–2 | 5–6 | ✅ **DONE** (2 days) | Authenticatable CLI with multi-profile |
-| M2: Read Operations | 2–3 | 7–9 | 🔵 **ACTIVE** | Can query Clockify data |
+| M2: Read Operations | 2–3 | 7–9 | ✅ **DONE** (3 days) | Can query Clockify data |
 | M3: Time Entry | 3–4 | 10–13 | ⬜ Pending | **Daily time tracking** |
 | M4: Write Operations | 2–3 | 12–16 | ⬜ Pending | Can create/manage resources |
 | M5: Tasks | 1 | 13–17 | ⬜ Pending | Task management |
@@ -585,8 +606,10 @@ M10 (Quality & Polish)
 
 **M2 Sprint 1 Actual:** Completed in ~1 day. Entity types defined, typed API methods, workspace list/get commands, user get/list/info commands, 21 new tests. All success criteria met.
 
+**M2 Sprint 2 Actual:** Completed in ~2 days. Project/client/tag list/get commands, pagination infrastructure (DoWithPagination, fetchPaginated helpers), 20 new tests. 98 total tests passing. All success criteria met.
+
 ---
 
 *This plan should be reviewed after M1 completion (decision point) to validate assumptions, adjust estimates, and refine the backlog based on real API discoveries.*
 
-*Last updated: 2026-09-25 — M2 Sprint 1 complete (workspace/user commands, entity types, typed API methods). Sprint 2 pending (project/client/tag + pagination).*`
+*Last updated: 2026-09-29 — M2 complete (all read operations, pagination, 98 tests passing). M3 (Time Entry) is next.*``
