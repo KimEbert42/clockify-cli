@@ -1,6 +1,6 @@
 # Binaries
-clockify
-clockify-cli
+/clockify
+/clockify-cli
 *.exe
 *.exe~
 *.dll

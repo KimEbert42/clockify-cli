@@ -125,6 +125,25 @@ func (c *ClockifyClient) GetProject(ctx context.Context, id string) (*clockify.P
 	return &proj, err
 }
 
+func (c *ClockifyClient) CreateProject(ctx context.Context, req clockify.CreateProjectRequest) (*clockify.Project, error) {
+	path := fmt.Sprintf("/workspaces/%s/projects", c.workspaceID)
+	var proj clockify.Project
+	err := c.Do(ctx, "POST", path, req, &proj)
+	return &proj, err
+}
+
+func (c *ClockifyClient) UpdateProject(ctx context.Context, id string, req clockify.UpdateProjectRequest) (*clockify.Project, error) {
+	path := fmt.Sprintf("/workspaces/%s/projects/%s", c.workspaceID, id)
+	var proj clockify.Project
+	err := c.Do(ctx, "PUT", path, req, &proj)
+	return &proj, err
+}
+
+func (c *ClockifyClient) DeleteProject(ctx context.Context, id string) error {
+	path := fmt.Sprintf("/workspaces/%s/projects/%s", c.workspaceID, id)
+	return c.Do(ctx, "DELETE", path, nil, nil)
+}
+
 func (c *ClockifyClient) ListClients(ctx context.Context, opts ListClientsOpts) ([]clockify.Client, error) {
 	path := fmt.Sprintf("/workspaces/%s/clients", c.workspaceID)
 	path = appendQueryParams(path, map[string]string{
@@ -145,6 +164,25 @@ func (c *ClockifyClient) GetClient(ctx context.Context, id string) (*clockify.Cl
 	return &client, err
 }
 
+func (c *ClockifyClient) CreateClient(ctx context.Context, req clockify.CreateClientRequest) (*clockify.Client, error) {
+	path := fmt.Sprintf("/workspaces/%s/clients", c.workspaceID)
+	var client clockify.Client
+	err := c.Do(ctx, "POST", path, req, &client)
+	return &client, err
+}
+
+func (c *ClockifyClient) UpdateClient(ctx context.Context, id string, req clockify.UpdateClientRequest) (*clockify.Client, error) {
+	path := fmt.Sprintf("/workspaces/%s/clients/%s", c.workspaceID, id)
+	var client clockify.Client
+	err := c.Do(ctx, "PUT", path, req, &client)
+	return &client, err
+}
+
+func (c *ClockifyClient) DeleteClient(ctx context.Context, id string) error {
+	path := fmt.Sprintf("/workspaces/%s/clients/%s", c.workspaceID, id)
+	return c.Do(ctx, "DELETE", path, nil, nil)
+}
+
 func (c *ClockifyClient) ListTags(ctx context.Context, opts ListTagsOpts) ([]clockify.Tag, error) {
 	path := fmt.Sprintf("/workspaces/%s/tags", c.workspaceID)
 	path = appendQueryParams(path, map[string]string{
@@ -156,6 +194,32 @@ func (c *ClockifyClient) ListTags(ctx context.Context, opts ListTagsOpts) ([]clo
 	var tags []clockify.Tag
 	err := c.Do(ctx, "GET", path, nil, &tags)
 	return tags, err
+}
+
+func (c *ClockifyClient) GetTag(ctx context.Context, id string) (*clockify.Tag, error) {
+	path := fmt.Sprintf("/workspaces/%s/tags/%s", c.workspaceID, id)
+	var tag clockify.Tag
+	err := c.Do(ctx, "GET", path, nil, &tag)
+	return &tag, err
+}
+
+func (c *ClockifyClient) CreateTag(ctx context.Context, req clockify.CreateTagRequest) (*clockify.Tag, error) {
+	path := fmt.Sprintf("/workspaces/%s/tags", c.workspaceID)
+	var tag clockify.Tag
+	err := c.Do(ctx, "POST", path, req, &tag)
+	return &tag, err
+}
+
+func (c *ClockifyClient) UpdateTag(ctx context.Context, id string, req clockify.UpdateTagRequest) (*clockify.Tag, error) {
+	path := fmt.Sprintf("/workspaces/%s/tags/%s", c.workspaceID, id)
+	var tag clockify.Tag
+	err := c.Do(ctx, "PUT", path, req, &tag)
+	return &tag, err
+}
+
+func (c *ClockifyClient) DeleteTag(ctx context.Context, id string) error {
+	path := fmt.Sprintf("/workspaces/%s/tags/%s", c.workspaceID, id)
+	return c.Do(ctx, "DELETE", path, nil, nil)
 }
 
 func (c *ClockifyClient) ListTimeEntries(ctx context.Context, userID string, opts ListTimeEntriesOpts) ([]clockify.TimeEntry, error) {

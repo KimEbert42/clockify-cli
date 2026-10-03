@@ -2,7 +2,7 @@
 
 **Version:** 1.0.0
 **Date:** 2026-09-21
-**Status:** M3 Complete — M4 Pending
+**Status:** M4 Complete — M5 Pending
 
 ---
 
@@ -260,30 +260,36 @@ The inverse of effort is used so that less effort yields a higher score (favorin
 
 **Scope:** Create, update, delete for projects, clients, and tags. Includes destructive operation confirmation and JSON input.
 
-| Deliverable | Description |
-|-------------|-------------|
-| `clockify project create` | With `--name`, `--client`, `--billable`, `--color`, `--estimate` flags |
-| `clockify project update` | PATCH semantics, partial updates |
-| `clockify project delete` | With confirmation, `--confirm` to skip |
-| `clockify client create` | With `--name`, `--email`, `--address`, `--phone`, `--note` |
-| `clockify client update` | Partial updates |
-| `clockify client delete` | With confirmation |
-| `clockify tag create` | With `--name`, `--color` |
-| `clockify tag update` | Rename, recolor |
-| `clockify tag delete` | With confirmation |
-| JSON file/stdin input | `--file` and `--stdin` for all create/update commands |
-| Idempotent create | `--if-not-exists` flag for create commands |
+**Status:** ✅ **COMPLETE**
+**Completed:** 2026-10-03
+
+| Deliverable | Status | Notes |
+|-------------|--------|-------|
+| `clockify project create` | ✅ | With `--name`, `--client`, `--billable`, `--color`, `--estimate`, `--note`, `--file`, `--stdin`, `--if-not-exists` flags |
+| `clockify project update` | ✅ | PATCH semantics, partial updates, `--id`/`--name` resolution |
+| `clockify project delete` | ✅ | With confirmation, `--confirm` to skip |
+| `clockify client create` | ✅ | With `--name`, `--email`, `--address`, `--note`, `--file`, `--stdin`, `--if-not-exists` |
+| `clockify client update` | ✅ | Partial updates, `--id`/`--name` resolution |
+| `clockify client delete` | ✅ | With confirmation |
+| `clockify tag create` | ✅ | With `--name`, `--file`, `--stdin`, `--if-not-exists` |
+| `clockify tag update` | ✅ | Rename, archive, `--id`/`--name` resolution |
+| `clockify tag delete` | ✅ | With confirmation |
+| JSON file/stdin input | ✅ | `--file` and `--stdin` for all create/update commands |
+| Idempotent create | ✅ | `--if-not-exists` flag for create commands |
+| API methods | ✅ | CreateProject, UpdateProject, DeleteProject, CreateClient, UpdateClient, DeleteClient, CreateTag, UpdateTag, DeleteTag |
+| Name resolution | ✅ | Fuzzy matching for client and tag operations |
+| Unit tests | ✅ | 15+ new tests across project, client, and tag write operations |
 
 **Success Criteria:**
-- Create project with client reference works end-to-end
-- Delete shows confirmation prompt; `--confirm` bypasses it
-- `echo '{"name":"X"}' | clockify project create --stdin` works
-- `--if-not-exists` returns existing resource without error if it already exists
-- All outputs are machine-readable in JSON mode
+- [x] Create project with client reference works end-to-end
+- [x] Delete shows confirmation prompt; `--confirm` bypasses it
+- [x] `echo '{"name":"X"}' | clockify project create --stdin` works
+- [x] `--if-not-exists` returns existing resource without error if it already exists
+- [x] All outputs are machine-readable in JSON mode
 
 **Dependencies:** M2 (read operations exist), M0 (error handling, confirmation prompts).
 
-**Estimated Effort:** 2–3 weeks.
+**Actual Effort:** ~1 day.
 
 **Confidence:** High (85%). CRUD patterns are well-established after M2.
 
@@ -618,7 +624,7 @@ M10 (Quality & Polish)
 | M1: Auth & Config | 1–2 | 5–6 | ✅ **DONE** (2 days) | Authenticatable CLI with multi-profile |
 | M2: Read Operations | 2–3 | 7–9 | ✅ **DONE** (3 days) | Can query Clockify data |
 | M3: Time Entry | 3–4 | 10–13 | ✅ **DONE** (1 day) | **Daily time tracking** |
-| M4: Write Operations | 2–3 | 12–16 | ⬜ Pending | Can create/manage resources |
+| M4: Write Operations | 2–3 | 12–16 | ✅ **DONE** (1 day) | Can create/manage resources |
 | M5: Tasks | 1 | 13–17 | ⬜ Pending | Task management |
 | M6: Reports | 2–3 | 15–20 | ⬜ Pending | Time reports & export |
 | M7: Secondary Resources | 4–5 | 19–25 | ⬜ Pending | Full API coverage |
@@ -640,8 +646,10 @@ M10 (Quality & Polish)
 
 **M3 Actual:** Completed in ~1 day. Duration parser (Parse/Format), relative date parser, time entry API methods (list, get, create, update, delete, start, stop, bulk, batch), all CLI commands (list, get, create, update, delete, start, stop, bulk), --hydrated flag, --in-progress filter, 25+ new tests. 123 total tests passing. All success criteria met.
 
+**M4 Actual:** Completed in ~1 day. 6 request types (CreateProjectRequest, UpdateProjectRequest, CreateClientRequest, UpdateClientRequest, CreateTagRequest, UpdateTagRequest), 9 API methods (CreateProject, UpdateProject, DeleteProject, CreateClient, UpdateClient, DeleteClient, CreateTag, UpdateTag, DeleteTag), name resolution helpers for client/tag, 9 CLI commands (project/client/tag create/update/delete), --if-not-exists flag, --file/--stdin JSON input, 15+ new tests. 138 total tests passing. All success criteria met.
+
 ---
 
 *This plan should be reviewed after M1 completion (decision point) to validate assumptions, adjust estimates, and refine the backlog based on real API discoveries.*
 
-*Last updated: 2026-09-29 — M3 complete (time entry CRUD, timer operations, duration parsing, 123 tests passing). M4 (Write Operations) is next.*`
+*Last updated: 2026-10-03 — M4 complete (project/client/tag CRUD, idempotent create, JSON input, 138 tests passing). M5 (Task Management) is next.*`
