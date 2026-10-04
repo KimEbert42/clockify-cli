@@ -1,8 +1,8 @@
 # clockify-cli — Project Plan
 
 **Version:** 1.0.0
-**Date:** 2026-10-03
-**Status:** M6 Complete — M7 Pending
+**Date:** 2026-10-04
+**Status:** M7 Complete — M8 Pending
 
 ---
 
@@ -421,29 +421,49 @@ The inverse of effort is used so that less effort yields a higher score (favorin
 
 **Scope:** Complete API coverage for all remaining Clockify resources.
 
-| Deliverable | Description |
-|-------------|-------------|
-| `clockify invoice` | Full CRUD (list, get, create, update, delete) |
-| `clockify schedule` | Full CRUD with date range filtering |
-| `clockify time-off` | List, create, update-status (no delete per spec) |
-| `clockify expense` | Full CRUD with project and date filters |
-| `clockify custom-field` | Full CRUD with type options (DROPDOWN, CHECKBOX, TEXT, NUMBER, LINK, DATE) |
-| `clockify webhook` | Full CRUD with event types |
-| `clockify approval` | List, submit, update (workflow operations) |
-| `clockify group` | Full CRUD with member management (`--add-member`, `--remove-member`) |
+**Status:** ✅ **COMPLETE**
+**Completed:** 2026-10-04
+**Sprint plan:** `M7-SPRINT-PLAN.md` (official docs.clockify.me verified 2026-10-04)
+
+| Deliverable | Status | Notes |
+|-------------|--------|-------|
+| `clockify invoice` | ✅ | list/get/create/update/delete + PATCH status; wrapped `{invoices,total}` handled |
+| `clockify schedule` | ✅ | `/scheduling/assignments/*`; date range required; `--hours-per-day`/`--duration`; `--series` |
+| `clockify time-off` | ✅ | POST list; policy-scoped create/update-status/delete; `--type` resolves policy |
+| `clockify expense` | ✅ | CRUD + category resolution; `--amount`→`total`; project/user/date filters |
+| `clockify custom-field` | ✅ | CRUD; TEXT→TXT, DROPDOWN→DROPDOWN_SINGLE; DATE rejected with explanation |
+| `clockify webhook` | ✅ | CRUD; official event enum + aliases (TIME_ENTRY_CREATED→NEW_TIME_ENTRY) |
+| `clockify approval` | ✅ | list/submit (period-based)/update-status; `--time-entry` rejected with explanation |
+| `clockify group` | ✅ | CRUD via `user-groups` path; `--members`, `--add-member`, `--remove-member` |
+| Types + enums | ✅ | `pkg/clockify/m7.go`, `m7_enums.go` |
+| API methods | ✅ | `internal/api/m7_resources.go` |
+| CLI commands | ✅ | 8 files under `internal/cli/` + `m7_helpers.go` + pagination |
+| Unit tests | ✅ | enums, API httptest, CLI help/validation/functional |
+
+**Official API corrections vs spec (implemented per docs.clockify.me):**
+- Group path is `user-groups`; member add/remove are dedicated endpoints
+- Time-off list is POST; create/status/delete are policy-scoped paths
+- Approval submit is period-based (`WEEKLY`/`MONTHLY` + `periodStart`), not per-entry IDs
+- Custom-field types: `TXT`, `NUMBER`, `DROPDOWN_SINGLE/MULTIPLE`, `CHECKBOX`, `LINK` (no `DATE`)
+- Invoice create requires `clientId`, `currency`, `issuedDate`, `dueDate`, `number`
+- Schedule list requires `start`/`end`; create body uses `hoursPerDay`
 
 **Success Criteria:**
-- All 8 resource types have complete CRUD operations
-- Group member management works correctly
-- Webhook event types are validated on create
-- Time-off status updates work (APPROVED, REJECTED)
-- Custom field types are validated
+- [x] All 8 resource types have complete CRUD operations
+- [x] Group member management works correctly
+- [x] Webhook event types are validated on create
+- [x] Time-off status updates work (APPROVED, REJECTED)
+- [x] Custom field types are validated
+- [x] All commands appear in `clockify --help`
+- [x] Unit tests pass across all packages
 
 **Dependencies:** M0–M4 (foundation + CRUD patterns established).
 
-**Estimated Effort:** 2–4 days (8 resources × ~0.25–0.5 day each with established M4/M5 patterns). Original estimate was 4–5 weeks; revised down based on actual velocity.
+**Actual Effort:** ~1 day (official API docs replaced live spike; patterns reused from M4/M5).
 
-**Confidence:** High (80%). CRUD patterns are proven across project/client/tag/task; main risk is undocumented behaviors on approval/schedule.
+**Confidence:** High (85%). Remaining risk: live plan-gated features (invoice/approval/webhook) and exact response field names on regional workspaces.
+
+**Tags:** `v0.7.0-m6` created on M6 commit; tag `v0.8.0-m7` after M7 commit.
 
 ---
 
@@ -612,12 +632,12 @@ M10 (Quality & Polish)
 | M4 | Create and manage projects, clients, tags | ✅ Done |
 | M5 | Manage tasks within projects | ✅ Done |
 | M6 | Generate time reports and export | ✅ Done |
-| M7 | Full Clockify API access | ⬜ Next |
-| M8 | Shell completions, CI/CD integration | ⬜ Pending |
+| M7 | Full Clockify API access | ✅ Done |
+| M8 | Shell completions, CI/CD integration | ⬜ Next |
 | M9 | Install via package managers | ⬜ Pending |
 | M10 | Production-quality, well-documented CLI | ⬜ Pending |
 
-**Users can already do (M0–M6):** authenticate, list/search all core entities, track time with timers, create/update/delete projects, clients, tags, and tasks, and generate summary/detailed/weekly reports with CSV export — a functional daily-driver CLI for Clockify.
+**Users can already do (M0–M7):** authenticate, list/search all core entities, track time with timers, create/update/delete projects, clients, tags, tasks, invoices, schedules, expenses, custom fields, webhooks, user groups, manage time-off and approval workflows, and generate summary/detailed/weekly reports with CSV export — a functional daily-driver CLI covering the major Clockify API surface.
 
 ---
 
@@ -715,18 +735,18 @@ M10 (Quality & Polish)
 | M4: Write Operations | 2–3 weeks | **~1 day** | ✅ **DONE** | Can create/manage resources |
 | M5: Tasks | 1 week | **~1 day** | ✅ **DONE** | Task management |
 | M6: Reports | 2–3 weeks | **~0.5 day** | ✅ **DONE** | Time reports & export |
-| M7: Secondary Resources | 4–5 weeks | *2–4 days (est.)* | ⬜ Pending | Full API coverage |
+| M7: Secondary Resources | 4–5 weeks | **~1 day** | ✅ **DONE** | Full API coverage |
 | M8: Shell & Power | 2–3 weeks | *1–2 days (est.)* | ⬜ Pending | Shell integration, CI/CD |
 | M9: Distribution | 2–3 weeks | *1–2 days (est.)* | ⬜ Pending | Package manager installs |
 | M10: Quality & Polish | 2–3 weeks | *1–2 days (est.)* | ⬜ Pending | Production-ready CLI |
 
 ### 6.2 Velocity Observation
 
-**Actual velocity:** ~1 day per CRUD-pattern milestone (M0, M3, M4, M5); 2–3 days where multi-sprint (M1, M2); ~0.5 day for M6 once official reports API docs replaced the planned live spike. Original estimates assumed calendar weeks; actuals compress to days once foundation patterns (auth, HTTP client, output, name resolution, pagination, confirmation, file/stdin) were established in M0–M2.
+**Actual velocity:** ~1 day per CRUD-pattern milestone (M0, M3, M4, M5, M7); 2–3 days where multi-sprint (M1, M2); ~0.5 day for M6 once official reports API docs replaced the planned live spike. Original estimates assumed calendar weeks; actuals compress to days once foundation patterns (auth, HTTP client, output, name resolution, pagination, confirmation, file/stdin) were established in M0–M2. M7 followed the same pattern: official docs.clockify.me endpoints + M4/M5 CRUD templates.
 
-**Revised remaining forecast:** ~6–12 days for M7–M10 (vs original 12–16 weeks). M6 is no longer the outlier — official docs provided endpoints, auth, and request shapes up front.
+**Revised remaining forecast:** ~3–6 days for M8–M10 (vs original 12–16 weeks).
 
-**Cumulative actual (M0–M6):** ~9.5 development days. 255 tests passing across all packages.
+**Cumulative actual (M0–M7):** ~10.5 development days. All packages green (286 test runs, 0 failures).
 
 ### 6.3 Milestone Tagging
 
@@ -738,8 +758,9 @@ M10 (Quality & Polish)
 | M3 | `v0.4.0-m3` | Time entry |
 | M4 | `v0.5.0-m4` | Write ops (tagged 2026-10-03) |
 | M5 | `v0.6.0-m5` | Task mgmt (tagged 2026-10-03) |
-| M6 | `v0.7.0-m6` | Reports & analytics (tag after commit) |
-| M7+ | — | Tag on completion |
+| M6 | `v0.7.0-m6` | Reports & analytics (tagged 2026-10-04) |
+| M7 | `v0.8.0-m7` | Secondary resources (tag after M7 commit) |
+| M8+ | — | Tag on completion |
 
 **First usable release (M3 complete):** Was planned weeks 10–13; actually reached after ~7 days. Users can authenticate, track time, manage projects/clients/tags/tasks, and generate reports.
 
@@ -749,4 +770,4 @@ M10 (Quality & Polish)
 
 *Post-M1 review outcomes: estimates revised downward after M0–M5 actuals; open questions on batch endpoints and API versioning resolved; report API host confirmed via spec §3.6.*
 
-*Last updated: 2026-10-03 — M6 complete (report summary/detailed/weekly, ReportsBaseURL with correct regional `/report/v1` paths, CSV/PDF export, dual-client resolution, 255 tests). Official Clockify Reports API docs replaced the planned spike: POST endpoints, X-Api-Key auth, documented request bodies. M7 (Secondary Resources) is next. Tags created: v0.5.0-m4, v0.6.0-m5; tag v0.7.0-m6 after M6 is committed.*`
+*Last updated: 2026-10-04 — M7 complete (invoice, schedule, time-off, expense, custom-field, webhook, approval, group). Official docs.clockify.me endpoints implemented; spec↔API mismatches documented in M7-SPRINT-PLAN.md §6. Tags: v0.7.0-m6 created on M6 commit; tag v0.8.0-m7 after M7 is committed. M8 (Shell Completion & Power Features) is next.*`

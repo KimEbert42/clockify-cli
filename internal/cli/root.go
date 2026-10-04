@@ -56,6 +56,14 @@ Supports multiple output formats (table, JSON, CSV, YAML) and shell completion.`
 	cmd.AddCommand(newTaskCmd())
 	cmd.AddCommand(newTimeEntryCmd())
 	cmd.AddCommand(newReportCmd())
+	cmd.AddCommand(newInvoiceCmd())
+	cmd.AddCommand(newScheduleCmd())
+	cmd.AddCommand(newTimeOffCmd())
+	cmd.AddCommand(newExpenseCmd())
+	cmd.AddCommand(newCustomFieldCmd())
+	cmd.AddCommand(newWebhookCmd())
+	cmd.AddCommand(newApprovalCmd())
+	cmd.AddCommand(newGroupCmd())
 	registerAliases(cmd)
 
 	return cmd
