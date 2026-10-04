@@ -152,3 +152,31 @@ type UpdateTagRequest struct {
 	Name     string `json:"name,omitempty"`
 	Archived *bool  `json:"archived,omitempty"`
 }
+
+type Task struct {
+	ID          string    `json:"id" yaml:"id"`
+	Name        string    `json:"name" yaml:"name"`
+	ProjectID   string    `json:"projectId" yaml:"projectId"`
+	WorkspaceID string    `json:"workspaceId" yaml:"workspaceId"`
+	AssigneeIDs []string  `json:"assigneeIds" yaml:"assigneeIds"`
+	Estimate    *Estimate `json:"estimate" yaml:"estimate"`
+	Status      string    `json:"status" yaml:"status"`
+	IsBillable  bool      `json:"isBillable" yaml:"isBillable"`
+	Active      bool      `json:"active" yaml:"active"`
+}
+
+type CreateTaskRequest struct {
+	Name        string    `json:"name"`
+	Estimate    *Estimate `json:"estimate,omitempty"`
+	Status      string    `json:"status,omitempty"`
+	AssigneeIDs []string  `json:"assigneeIds,omitempty"`
+	IsBillable  bool      `json:"isBillable,omitempty"`
+}
+
+type UpdateTaskRequest struct {
+	Name        string    `json:"name,omitempty"`
+	Estimate    *Estimate `json:"estimate,omitempty"`
+	Status      string    `json:"status,omitempty"`
+	AssigneeIDs []string  `json:"assigneeIds,omitempty"`
+	IsBillable  *bool     `json:"isBillable,omitempty"`
+}

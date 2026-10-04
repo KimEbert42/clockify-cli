@@ -34,6 +34,12 @@ type ListUsersOpts struct {
 	PageSize int
 }
 
+type ListTasksOpts struct {
+	IsActive  *bool
+	Page      int
+	PageSize  int
+}
+
 type ListTimeEntriesOpts struct {
 	Start       string
 	End         string
@@ -219,6 +225,48 @@ func (c *ClockifyClient) UpdateTag(ctx context.Context, id string, req clockify.
 
 func (c *ClockifyClient) DeleteTag(ctx context.Context, id string) error {
 	path := fmt.Sprintf("/workspaces/%s/tags/%s", c.workspaceID, id)
+	return c.Do(ctx, "DELETE", path, nil, nil)
+}
+
+func (c *ClockifyClient) ListTasks(ctx context.Context, projectID string, opts ListTasksOpts) ([]clockify.Task, error) {
+	path := fmt.Sprintf("/workspaces/%s/projects/%s/tasks", c.workspaceID, projectID)
+	params := map[string]string{
+		"page":     strconv.Itoa(opts.Page),
+		"pageSize": strconv.Itoa(opts.PageSize),
+	}
+	if opts.IsActive != nil {
+		params["is-active"] = strconv.FormatBool(*opts.IsActive)
+	}
+	path = appendQueryParams(path, params)
+
+	var tasks []clockify.Task
+	err := c.Do(ctx, "GET", path, nil, &tasks)
+	return tasks, err
+}
+
+func (c *ClockifyClient) GetTask(ctx context.Context, projectID, taskID string) (*clockify.Task, error) {
+	path := fmt.Sprintf("/workspaces/%s/projects/%s/tasks/%s", c.workspaceID, projectID, taskID)
+	var task clockify.Task
+	err := c.Do(ctx, "GET", path, nil, &task)
+	return &task, err
+}
+
+func (c *ClockifyClient) CreateTask(ctx context.Context, projectID string, req clockify.CreateTaskRequest) (*clockify.Task, error) {
+	path := fmt.Sprintf("/workspaces/%s/projects/%s/tasks", c.workspaceID, projectID)
+	var task clockify.Task
+	err := c.Do(ctx, "POST", path, req, &task)
+	return &task, err
+}
+
+func (c *ClockifyClient) UpdateTask(ctx context.Context, projectID, taskID string, req clockify.UpdateTaskRequest) (*clockify.Task, error) {
+	path := fmt.Sprintf("/workspaces/%s/projects/%s/tasks/%s", c.workspaceID, projectID, taskID)
+	var task clockify.Task
+	err := c.Do(ctx, "PUT", path, req, &task)
+	return &task, err
+}
+
+func (c *ClockifyClient) DeleteTask(ctx context.Context, projectID, taskID string) error {
+	path := fmt.Sprintf("/workspaces/%s/projects/%s/tasks/%s", c.workspaceID, projectID, taskID)
 	return c.Do(ctx, "DELETE", path, nil, nil)
 }
 

@@ -124,6 +124,42 @@ func fetchPaginatedTags(ctx context.Context, client *api.ClockifyClient, opts ap
 	}, nil
 }
 
+func fetchPaginatedTasks(ctx context.Context, client *api.ClockifyClient, projectID string, opts api.ListTasksOpts, page, pageSize int, noPagination bool) ([]clockify.Task, *clockify.PageInfo, error) {
+	if !noPagination {
+		opts.Page = page
+		opts.PageSize = pageSize
+		tasks, err := client.ListTasks(ctx, projectID, opts)
+		return tasks, &clockify.PageInfo{Page: page, PageSize: pageSize}, err
+	}
+
+	var allTasks []clockify.Task
+	currentPage := 1
+
+	for {
+		opts.Page = currentPage
+		opts.PageSize = pageSize
+		tasks, err := client.ListTasks(ctx, projectID, opts)
+		if err != nil {
+			return nil, nil, err
+		}
+		if len(tasks) == 0 {
+			break
+		}
+		allTasks = append(allTasks, tasks...)
+		if len(tasks) < pageSize {
+			break
+		}
+		currentPage++
+	}
+
+	return allTasks, &clockify.PageInfo{
+		Page:         1,
+		PageSize:     pageSize,
+		TotalPages:   currentPage,
+		TotalResults: len(allTasks),
+	}, nil
+}
+
 func buildProjectQueryParams(opts api.ListProjectsOpts) string {
 	params := ""
 	if opts.Status != "" {

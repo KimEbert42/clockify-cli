@@ -1,8 +1,8 @@
 # clockify-cli — Project Plan
 
 **Version:** 1.0.0
-**Date:** 2026-09-21
-**Status:** M4 Complete — M5 Pending
+**Date:** 2026-10-03
+**Status:** M5 Complete — M6 Pending
 
 ---
 
@@ -299,21 +299,33 @@ The inverse of effort is used so that less effort yields a higher score (favorin
 
 **Scope:** Task CRUD nested under projects.
 
-| Deliverable | Description |
-|-------------|-------------|
-| `clockify task list` | List tasks for a project, `--is-active` filter |
-| `clockify task create` | With `--project`, `--name`, `--estimate`, `--status`, `--assignee` |
-| `clockify task update` | Update name, status, estimate |
-| `clockify task delete` | With confirmation |
+**Status:** ✅ **COMPLETE**
+**Completed:** 2026-10-03
+
+| Deliverable | Status | Notes |
+|-------------|--------|-------|
+| `clockify task list` | ✅ | `--project` (ID or fuzzy name), `--is-active` filter |
+| `clockify task create` | ✅ | `--project`, `--name`, `--estimate`, `--status`, `--assignee`, `--billable`, `--file`, `--stdin`, `--if-not-exists` |
+| `clockify task update` | ✅ | PUT + existing-seed merge, partial updates, `--file`/`--stdin` |
+| `clockify task delete` | ✅ | With confirmation prompt, `--confirm` to skip |
+| Status validation | ✅ | TODO, IN_PROGRESS, DONE (validated before API calls) |
+| Estimate parsing | ✅ | `pkg/duration.Parse`: seconds, `1h`, `1.5h`, `30m`, `1h30m` |
+| Assignee resolution | ✅ | User ID, email, or fuzzy name via `resolveUserRef` |
+| Project resolution | ✅ | `resolveProjectRef`: tries ID first, falls back to fuzzy name |
+| `--if-not-exists` | ✅ | Scoped to project via `resolveTaskByName` |
+| API methods | ✅ | ListTasks, GetTask, CreateTask, UpdateTask, DeleteTask |
+| Paths | ✅ | `/workspaces/{wid}/projects/{pid}/tasks[/{tid}]` |
+| Pagination | ✅ | `fetchPaginatedTasks` helper |
+| Unit tests | ✅ | 17 new tests in task_test.go |
 
 **Success Criteria:**
-- `clockify task list --project X` returns tasks for that project
-- Create task with estimate and assignee works
-- Task status can be set to TODO, IN_PROGRESS, DONE
+- [x] `clockify task list --project X` returns tasks for that project
+- [x] Create task with estimate and assignee works
+- [x] Task status can be set to TODO, IN_PROGRESS, DONE
 
 **Dependencies:** M4 (project CRUD), M2 (user list for assignee).
 
-**Estimated Effort:** 1 week.
+**Actual Effort:** ~1 day.
 
 **Confidence:** High (90%). Straightforward CRUD following established patterns.
 
@@ -322,6 +334,8 @@ The inverse of effort is used so that less effort yields a higher score (favorin
 ### M6: Reports & Analytics
 
 **Scope:** Summary, detailed, and weekly reports with export capabilities.
+
+**Status:** ⬜ Pending — **Next milestone**
 
 | Deliverable | Description |
 |-------------|-------------|
@@ -332,17 +346,52 @@ The inverse of effort is used so that less effort yields a higher score (favorin
 | Export formats | `--export csv`, `--export pdf` (if API supports) |
 | Date range shortcuts | `this-week`, `last-week`, `this-month`, `last-month` |
 
+**Spec reference:** §8.11 `clockify report` (clockify-cli-spec.md:919–950)
+
+**M6 Planning Notes (from spec + codebase):**
+
+1. **Reports use a separate host per region** (spec §3.6):
+
+   | Region | API Host | Reports Host |
+   |--------|----------|--------------|
+   | global | `api.clockify.me` | `reports.api.clockify.me` |
+   | eu-de | `euc1.clockify.me` | `reports.euc1.clockify.me` |
+   | us | `use2.clockify.me` | `reports.use2.clockify.me` |
+   | uk | `euw2.clockify.me` | `reports.euw2.clockify.me` |
+   | au | `apse2.clockify.me` | `reports.apse2.clockify.me` |
+
+   → Need a `ReportsBaseURL(region)` helper in `internal/api/regions.go` and likely a reports-specific client or option on `ClockifyClient`.
+
+2. **Reusable building blocks already exist:**
+   - `pkg/duration.ParseRelativeDate` — `today`, `yesterday`, `this-week`, `last-week`, `this-month`, `last-month` (used by time-entry list)
+   - `internal/output.CSVFormatter` — CSV export via existing `--output csv` or new `--export csv` + `--file`
+   - `resolveProjectByName` / user list — filter resolution
+   - `fetchPaginated*` pattern — if reports are paginated
+
+3. **Spike required before implementation (half-day):**
+   - Confirm reports API base path (e.g. `/api/v1/reports/...` vs different)
+   - Confirm auth header behavior on reports host
+   - Capture one real response shape for summary/detailed/weekly
+   - Decide: separate reports client vs. baseURL override on existing client
+
+4. **Flag mapping (spec §8.11):**
+   - All reports: `--start` (required), `--end` (required except weekly), `--project`, `--task`, `--user`, `--group`, `--client`, `--status`, `--export`, `--file`
+   - Summary only: `--billable`, `--description`
+   - Status values: `IN_PROGRESS`, `NEW`, `APPROVED`, `REJECTED`
+
 **Success Criteria:**
-- `clockify report summary --start this-month --end today` returns correct totals
-- `clockify report detailed --export csv --file report.csv` produces valid CSV
-- Weekly report shows daily breakdown
-- Billable-only filter works correctly
+- [ ] `clockify report summary --start this-month --end today` returns correct totals
+- [ ] `clockify report detailed --export csv --file report.csv` produces valid CSV
+- [ ] Weekly report shows daily breakdown
+- [ ] Billable-only filter works correctly
 
-**Dependencies:** M3 (time entries), M2 (project/user data).
+**Dependencies:** M3 (time entries), M2 (project/user data). Both complete.
 
-**Estimated Effort:** 2–3 weeks.
+**Estimated Effort:** 2–3 days (1 half-day API spike + 1–2 days implementation). Original estimate was 2–3 weeks; revised down based on actual velocity, with the spike as the main uncertainty.
 
-**Confidence:** Medium (75%). Report API endpoints may have different patterns than standard CRUD; needs API exploration.
+**Confidence:** Medium (75%). Report API may use different request/response patterns; spike will validate before committing to implementation approach.
+
+**Key risk:** Reports host differs from main API — client construction must handle this cleanly without breaking existing commands.
 
 ---
 
@@ -370,9 +419,9 @@ The inverse of effort is used so that less effort yields a higher score (favorin
 
 **Dependencies:** M0–M4 (foundation + CRUD patterns established).
 
-**Estimated Effort:** 4–5 weeks (8 resources × ~0.5–1 week each).
+**Estimated Effort:** 2–4 days (8 resources × ~0.25–0.5 day each with established M4/M5 patterns). Original estimate was 4–5 weeks; revised down based on actual velocity.
 
-**Confidence:** Medium (70%). Some resources (approval, schedule) may have undocumented API behaviors.
+**Confidence:** High (80%). CRUD patterns are proven across project/client/tag/task; main risk is undocumented behaviors on approval/schedule.
 
 ---
 
@@ -400,9 +449,9 @@ The inverse of effort is used so that less effort yields a higher score (favorin
 
 **Dependencies:** M0–M7 (all commands need to exist for completion to work).
 
-**Estimated Effort:** 2–3 weeks.
+**Estimated Effort:** 1–2 days. Cobra has built-in completion support; caching layer reuses existing `config clear-cache` / cache-dir patterns from M1.
 
-**Confidence:** High (85%). Cobra has built-in completion support; caching is straightforward.
+**Confidence:** High (90%). Standard Cobra completion; commands are now stable enough to generate completions against.
 
 ---
 
@@ -432,9 +481,9 @@ The inverse of effort is used so that less effort yields a higher score (favorin
 
 **Dependencies:** M0–M8 (feature-complete CLI needed for distribution).
 
-**Estimated Effort:** 2–3 weeks.
+**Estimated Effort:** 1–2 days. Standard Go build/release patterns (goreleaser or hand-rolled GitHub Actions).
 
-**Confidence:** High (85%). Standard Go build and release patterns.
+**Confidence:** High (90%). Well-trodden Go CLI distribution path.
 
 ---
 
@@ -462,9 +511,9 @@ The inverse of effort is used so that less effort yields a higher score (favorin
 
 **Dependencies:** M0–M9 (feature-complete, distributed CLI).
 
-**Estimated Effort:** 2–3 weeks (ongoing throughout, but dedicated sprint at end).
+**Estimated Effort:** 1–2 days dedicated + ongoing (test coverage already strong at 153 tests; main gaps are integration tests against real API and README).
 
-**Confidence:** Medium-High (80%). Testing Clockify API integration requires test account setup.
+**Confidence:** Medium-High (85%). Unit tests are in good shape; integration tests need a test workspace.
 
 ---
 
@@ -532,19 +581,21 @@ M10 (Quality & Polish)
 
 ### 3.3 Value Delivery Timeline
 
-| After Milestone | What Users Can Do |
-|-----------------|-------------------|
-| M0 | Build and run CLI, see help |
-| M1 | Authenticate, configure workspace |
-| M2 | List and search projects, clients, tags, users |
-| M3 | **Daily driver**: track time, start/stop timers, list entries |
-| M4 | Create and manage projects, clients, tags |
-| M5 | Manage tasks within projects |
-| M6 | Generate time reports and export |
-| M7 | Full Clockify API access |
-| M8 | Shell completions, CI/CD integration |
-| M9 | Install via package managers |
-| M10 | Production-quality, well-documented CLI |
+| After Milestone | What Users Can Do | Status |
+|-----------------|-------------------|--------|
+| M0 | Build and run CLI, see help | ✅ Done |
+| M1 | Authenticate, configure workspace | ✅ Done |
+| M2 | List and search projects, clients, tags, users | ✅ Done |
+| M3 | **Daily driver**: track time, start/stop timers, list entries | ✅ Done |
+| M4 | Create and manage projects, clients, tags | ✅ Done |
+| M5 | Manage tasks within projects | ✅ Done |
+| M6 | Generate time reports and export | ⬜ Next |
+| M7 | Full Clockify API access | ⬜ Pending |
+| M8 | Shell completions, CI/CD integration | ⬜ Pending |
+| M9 | Install via package managers | ⬜ Pending |
+| M10 | Production-quality, well-documented CLI | ⬜ Pending |
+
+**Users can already do (M0–M5):** authenticate, list/search all core entities, track time with timers, create/update/delete projects, clients, tags, and tasks — a functional daily-driver CLI for Clockify.
 
 ---
 
@@ -558,7 +609,7 @@ M10 (Quality & Polish)
 | **Timer state management** | Medium — start/stop race conditions | Medium | Use `--in-progress` flag to check state before start/stop; handle 409 conflicts gracefully |
 | **OS keychain availability** | Medium — headless/CI environments fail | Low | Env var fallback is built-in; test on all platforms in M1 |
 | **Duration parsing ambiguity** | Low — user confusion | Low | Strict parsing with clear error messages; document supported formats |
-| **Report API uses different base URL** | Medium — requires separate client | Medium | Detect in M6 planning; may need reports-specific HTTP client configuration |
+| **Report API uses different base URL** | Medium — requires separate client | Medium | **Confirmed by spec §3.6**: reports host is `reports.<api-host>` per region. M6 spike will validate path/auth; plan for `ReportsBaseURL()` helper + optional client override. |
 | **API rate limiting in CI/CD** | Medium — scripts fail unpredictably | Medium | Implement exponential backoff in M0; document rate limits; add `--retry` flag |
 | **Binary size bloat** | Low — distribution concerns | Low | Use `ldflags` to strip debug info; monitor size in CI |
 | **Cobra alias system limitations** | Low — may not support all alias patterns | Low | Validate alias requirements in M0 spike; fall back to wrapper commands if needed |
@@ -596,18 +647,31 @@ M10 (Quality & Polish)
 | **M0 → M1 → M2 → M3 critical path** | Maximizes time-to-value for daily time tracking workflow |
 | **Group M7 resources together** | Similar CRUD patterns; lower priority per resource; batch efficiency |
 | **M8 (shell completion) late** | Commands stabilize before completion scripts are generated |
+| **Nested task paths** | `/workspaces/{wid}/projects/{pid}/tasks[/{tid}]` — matches Clockify API; task `--project` is required on every subcommand |
+| **Reports use separate host** | Spec §3.6 confirms `reports.<host>` per region; M6 must not assume same base URL as main API |
 
 ### 5.2 Open Questions
 
-| Question | Impact | Resolution Approach |
-|----------|--------|---------------------|
-| Does Clockify API support batch/bulk endpoints natively? | M3 (bulk time entries) | Test in M0 spike; if not, implement client-side batching |
-| What are the exact report API endpoints and request formats? | M6 | Prototype in M2/M3; may need separate reports client |
-| Is there a Clockify API versioning scheme? | All milestones | Check API docs; pin to v1 |
-| Are there rate limit headers beyond 50/s? | M0 (retry logic) | Test empirically; document discovered limits |
-| Does the plugin system have a design spec? | M8 (future) | Defer to post-M10; not in current scope |
+| Question | Impact | Status | Resolution / Approach |
+|----------|--------|--------|----------------------|
+| Does Clockify API support batch/bulk endpoints natively? | M3 (bulk time entries) | ✅ Resolved | Native batch endpoint exists: `POST /workspaces/{wid}/time-entries/batch` via `BatchGetTimeEntries`. Bulk create uses client-side loop + batch read. |
+| What are the exact report API endpoints and request formats? | M6 | 🔲 Open — **spike next** | Spec confirms separate reports host per region (`reports.api.clockify.me`, etc.). Need to confirm base path, auth, and response shapes in a half-day spike before M6 implementation. |
+| Is there a Clockify API versioning scheme? | All milestones | ✅ Resolved (practically) | All endpoints use `/api/v1` prefix. Pinned to v1 via `BaseURL()` in `internal/api/regions.go`. |
+| Are there rate limit headers beyond 50/s? | M0 (retry logic) | 🔲 Partially resolved | Client uses 45 req/s default with exponential backoff. No explicit rate-limit headers observed in use; document if discovered during M6 spike. |
+| Does the plugin system have a design spec? | M8 (future) | 🔲 Deferred | Out of scope until post-M10. |
 
-### 5.3 Out of Scope (Current Roadmap)
+### 5.3 Decisions Made During M4–M5
+
+| Decision | Rationale |
+|----------|-----------|
+| **PUT for updates (not PATCH)** | Clockify API uses PUT for project/client/tag/task updates. M4 notes say "PATCH semantics" but implementation correctly sends PUT with partial bodies. |
+| **Task estimate uses `duration.Parse`** | More flexible than spec's "seconds only" — accepts `3600`, `1h`, `1.5h`, `30m`. Raw seconds still work. |
+| **`resolveProjectRef` tries ID first** | Spec examples use `--project <projectId>`. Fast path: single GET by ID; falls back to fuzzy name via `resolveProjectByName`. |
+| **Task `--assignee` accepts ID/email/name** | Success criterion requires assignee to work; name/email resolution matches user-info patterns. Raw ID passes through if no name/email match. |
+| **Validate flags before API calls** | `--status` validated and `--name` checked before project resolution — invalid input fails fast without network calls. |
+| **List output uses display structs** | Follows `time_entry.go` `entryDisplay` pattern — flattens nested fields (estimate seconds → human string, assignee IDs → comma-joined) for table/CSV while JSON path gets structured data via the same display type for consistency. |
+
+### 5.4 Out of Scope (Current Roadmap)
 
 - Plugin system (deferred to post-M10)
 - PDF report export (API-dependent, may not be supported)
@@ -618,38 +682,48 @@ M10 (Quality & Polish)
 
 ## 6. Appendix: Estimated Timeline Summary
 
-| Milestone | Weeks | Cumulative | Status | Deliverable to Users |
-|-----------|-------|------------|--------|---------------------|
-| M0: Foundation | 3–4 | 3–4 | ✅ **DONE** (1 day) | Buildable CLI skeleton |
-| M1: Auth & Config | 1–2 | 5–6 | ✅ **DONE** (2 days) | Authenticatable CLI with multi-profile |
-| M2: Read Operations | 2–3 | 7–9 | ✅ **DONE** (3 days) | Can query Clockify data |
-| M3: Time Entry | 3–4 | 10–13 | ✅ **DONE** (1 day) | **Daily time tracking** |
-| M4: Write Operations | 2–3 | 12–16 | ✅ **DONE** (1 day) | Can create/manage resources |
-| M5: Tasks | 1 | 13–17 | ⬜ Pending | Task management |
-| M6: Reports | 2–3 | 15–20 | ⬜ Pending | Time reports & export |
-| M7: Secondary Resources | 4–5 | 19–25 | ⬜ Pending | Full API coverage |
-| M8: Shell & Power | 2–3 | 21–28 | ⬜ Pending | Shell integration, CI/CD |
-| M9: Distribution | 2–3 | 23–31 | ⬜ Pending | Package manager installs |
-| M10: Quality & Polish | 2–3 | 25–34 | ⬜ Pending | Production-ready CLI |
+### 6.1 Original Estimates vs Actuals
 
-**Total estimated effort:** 25–34 weeks (6–8 months) for 1 developer; 18–24 weeks (4.5–6 months) for 2 developers.
+| Milestone | Original Est. | Actual | Status | Deliverable to Users |
+|-----------|---------------|--------|--------|---------------------|
+| M0: Foundation | 3–4 weeks | **~1 day** | ✅ **DONE** | Buildable CLI skeleton |
+| M1: Auth & Config | 1–2 weeks | **~2 days** | ✅ **DONE** | Authenticatable CLI with multi-profile |
+| M2: Read Operations | 2–3 weeks | **~3 days** | ✅ **DONE** | Can query Clockify data |
+| M3: Time Entry | 3–4 weeks | **~1 day** | ✅ **DONE** | **Daily time tracking** |
+| M4: Write Operations | 2–3 weeks | **~1 day** | ✅ **DONE** | Can create/manage resources |
+| M5: Tasks | 1 week | **~1 day** | ✅ **DONE** | Task management |
+| M6: Reports | 2–3 weeks | *2–3 days (est.)* | ⬜ Pending — **Next** | Time reports & export |
+| M7: Secondary Resources | 4–5 weeks | *2–4 days (est.)* | ⬜ Pending | Full API coverage |
+| M8: Shell & Power | 2–3 weeks | *1–2 days (est.)* | ⬜ Pending | Shell integration, CI/CD |
+| M9: Distribution | 2–3 weeks | *1–2 days (est.)* | ⬜ Pending | Package manager installs |
+| M10: Quality & Polish | 2–3 weeks | *1–2 days (est.)* | ⬜ Pending | Production-ready CLI |
 
-**First usable release (M3 complete):** Weeks 10–13 — users can authenticate, track time, and generate basic reports. This is the minimum viable product.
+### 6.2 Velocity Observation
 
-**M0 Actual:** Completed in ~1 day vs 3–4 week estimate. 34 files, 2612 lines of Go. All success criteria met.
+**Actual velocity:** ~1 day per CRUD-pattern milestone (M0, M3, M4, M5); 2–3 days where multi-sprint (M1, M2). Original estimates assumed calendar weeks; actuals compress to days once foundation patterns (auth, HTTP client, output, name resolution, pagination, confirmation, file/stdin) were established in M0–M2.
 
-**M1 Actual:** Completed in ~2 days vs 1–2 week estimate. Multi-profile support, cache system, status validation, 37 unit tests. All success criteria met.
+**Revised remaining forecast:** ~7–13 days for M6–M10 (vs original 12–16 weeks). M6 is the outlier: half-day API spike + implementation; confidence drops if reports API diverges significantly from CRUD patterns.
 
-**M2 Sprint 1 Actual:** Completed in ~1 day. Entity types defined, typed API methods, workspace list/get commands, user get/list/info commands, 21 new tests. All success criteria met.
+**Cumulative actual (M0–M5):** ~9 development days. 153 tests passing across all packages.
 
-**M2 Sprint 2 Actual:** Completed in ~2 days. Project/client/tag list/get commands, pagination infrastructure (DoWithPagination, fetchPaginated helpers), 20 new tests. 98 total tests passing. All success criteria met.
+### 6.3 Milestone Tagging
 
-**M3 Actual:** Completed in ~1 day. Duration parser (Parse/Format), relative date parser, time entry API methods (list, get, create, update, delete, start, stop, bulk, batch), all CLI commands (list, get, create, update, delete, start, stop, bulk), --hydrated flag, --in-progress filter, 25+ new tests. 123 total tests passing. All success criteria met.
+| Milestone | Git Tag | Notes |
+|-----------|---------|-------|
+| M0 | `v0.1.0-m0` | Foundation |
+| M1 | `v0.2.0-m1` | Auth & config |
+| M2 | `v0.3.0-m2` | Read operations |
+| M3 | `v0.4.0-m3` | Time entry |
+| M4 | *not yet tagged* | Write ops complete 2026-10-03 |
+| M5 | *not yet tagged* | Task mgmt complete 2026-10-03 (uncommitted at plan update time) |
+| M6+ | — | Tag on completion |
 
-**M4 Actual:** Completed in ~1 day. 6 request types (CreateProjectRequest, UpdateProjectRequest, CreateClientRequest, UpdateClientRequest, CreateTagRequest, UpdateTagRequest), 9 API methods (CreateProject, UpdateProject, DeleteProject, CreateClient, UpdateClient, DeleteClient, CreateTag, UpdateTag, DeleteTag), name resolution helpers for client/tag, 9 CLI commands (project/client/tag create/update/delete), --if-not-exists flag, --file/--stdin JSON input, 15+ new tests. 138 total tests passing. All success criteria met.
+**First usable release (M3 complete):** Was planned weeks 10–13; actually reached after ~7 days. Users can authenticate, track time, and manage projects/clients/tags/tasks.
 
 ---
 
 *This plan should be reviewed after M1 completion (decision point) to validate assumptions, adjust estimates, and refine the backlog based on real API discoveries.*
 
-*Last updated: 2026-10-03 — M4 complete (project/client/tag CRUD, idempotent create, JSON input, 138 tests passing). M5 (Task Management) is next.*`
+*Post-M1 review outcomes: estimates revised downward after M0–M5 actuals; open questions on batch endpoints and API versioning resolved; report API host confirmed via spec §3.6.*
+
+*Last updated: 2026-10-03 — M5 complete (task CRUD, project-scoped resolution, status validation, 17 new tests, 153 total passing). M6 (Reports & Analytics) is next: half-day API spike on reports host, then summary/detailed/weekly commands. Remaining estimates revised based on ~1-day/milestone actual velocity.*`
