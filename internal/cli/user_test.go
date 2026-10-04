@@ -114,6 +114,7 @@ default:
   workspace_id: ws123
 `), 0600)
 	t.Setenv("XDG_CONFIG_HOME", filepath.Dir(filepath.Dir(cfgPath)))
+	t.Setenv("XDG_CACHE_HOME", filepath.Join(filepath.Dir(filepath.Dir(cfgPath)), "cache"))
 
 	buf := new(bytes.Buffer)
 	cmd := newRootCmd()
@@ -163,6 +164,7 @@ default:
   workspace_id: ws123
 `), 0600)
 	t.Setenv("XDG_CONFIG_HOME", filepath.Dir(filepath.Dir(cfgPath)))
+	t.Setenv("XDG_CACHE_HOME", filepath.Join(filepath.Dir(filepath.Dir(cfgPath)), "cache"))
 
 	buf := new(bytes.Buffer)
 	cmd := newRootCmd()
@@ -212,6 +214,7 @@ default:
   workspace_id: ws123
 `), 0600)
 	t.Setenv("XDG_CONFIG_HOME", filepath.Dir(filepath.Dir(cfgPath)))
+	t.Setenv("XDG_CACHE_HOME", filepath.Join(filepath.Dir(filepath.Dir(cfgPath)), "cache"))
 
 	buf := new(bytes.Buffer)
 	cmd := newRootCmd()
@@ -273,6 +276,7 @@ default:
   workspace_id: ws123
 `), 0600)
 	t.Setenv("XDG_CONFIG_HOME", filepath.Dir(filepath.Dir(cfgPath)))
+	t.Setenv("XDG_CACHE_HOME", filepath.Join(filepath.Dir(filepath.Dir(cfgPath)), "cache"))
 
 	buf := new(bytes.Buffer)
 	cmd := newRootCmd()

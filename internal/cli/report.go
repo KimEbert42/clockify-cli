@@ -53,6 +53,11 @@ func addReportCommonFlags(cmd *cobra.Command, requireEnd bool) {
 	cmd.Flags().String("status", "", "filter by approval state: IN_PROGRESS, NEW, APPROVED, REJECTED")
 	cmd.Flags().String("export", "", "export format: csv or pdf")
 	cmd.Flags().String("file", "", "output path for --export, or JSON file with report parameters")
+	cmd.Flags().Bool("stdin", false, "read report parameters JSON from stdin")
+	_ = cmd.RegisterFlagCompletionFunc("project", completeProjectRefC)
+	_ = cmd.RegisterFlagCompletionFunc("user", completeUserRefC)
+	_ = cmd.RegisterFlagCompletionFunc("client", completeClientRefC)
+	_ = cmd.RegisterFlagCompletionFunc("task", completeProjectRefC)
 }
 
 func newReportSummaryCmd() *cobra.Command {
@@ -102,13 +107,20 @@ func runReport(kind string, requireEnd bool) func(cmd *cobra.Command, args []str
 		statusRaw, _ := cmd.Flags().GetString("status")
 		exportFormat, _ := cmd.Flags().GetString("export")
 		filePath, _ := cmd.Flags().GetString("file")
+		stdinParams, _ := cmd.Flags().GetBool("stdin")
 		billableOnly, _ := cmd.Flags().GetBool("billable")
 		description, _ := cmd.Flags().GetString("description")
 
-		// Optional JSON params file (spec §8.11 --file as input).
+		// Optional JSON params from --file or --stdin (spec §8.11 --file as input).
 		// When --export is set, --file is the output path instead.
 		var fileParams map[string]any
-		if filePath != "" && exportFormat == "" {
+		if stdinParams && exportFormat == "" {
+			params := map[string]any{}
+			if err := readJSONInput("", true, &params); err != nil {
+				return err
+			}
+			fileParams = params
+		} else if filePath != "" && exportFormat == "" {
 			params, err := readReportParamsFile(filePath)
 			if err != nil {
 				return err

@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/kim/clockify-cli/internal/api"
@@ -24,13 +25,18 @@ func newWorkspaceCmd() *cobra.Command {
 }
 
 func newWorkspaceListCmd() *cobra.Command {
-	return &cobra.Command{
+	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "List all workspaces",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			profile, _ := cmd.Flags().GetString("profile")
 			outputFormat, _ := cmd.Flags().GetString("output")
 			quiet, _ := cmd.Flags().GetBool("quiet")
+
+			var cached []clockify.Workspace
+			if cachedList(cmd, "", compResourceWorkspaces, &cached) && len(cached) > 0 {
+				return formatOutput(cmd, cached, outputFormat, []string{"ID", "NAME", "CURRENCY"})
+			}
 
 			apiKey, region, err := loadAuth(profile)
 			if err != nil {
@@ -43,6 +49,9 @@ func newWorkspaceListCmd() *cobra.Command {
 				return err
 			}
 
+			rememberCompletionNames(cmd, "", compResourceWorkspaces, namesFromWorkspaces(workspaces))
+			rememberList(cmd, "", compResourceWorkspaces, workspaces)
+
 			if len(workspaces) == 0 && !quiet {
 				cmd.Println("No workspaces found.")
 				return nil
@@ -51,6 +60,8 @@ func newWorkspaceListCmd() *cobra.Command {
 			return formatOutput(cmd, workspaces, outputFormat, []string{"ID", "NAME", "CURRENCY"})
 		},
 	}
+	_ = cmd.RegisterFlagCompletionFunc("name", completeWorkspaceFlagC)
+	return cmd
 }
 
 func newWorkspaceGetCmd() *cobra.Command {
@@ -100,6 +111,8 @@ func newWorkspaceGetCmd() *cobra.Command {
 	}
 	cmd.Flags().String("id", "", "workspace ID")
 	cmd.Flags().String("name", "", "workspace name (fuzzy match)")
+	_ = cmd.RegisterFlagCompletionFunc("id", completeWorkspaceFlagC)
+	_ = cmd.RegisterFlagCompletionFunc("name", completeWorkspaceFlagC)
 	return cmd
 }
 
@@ -155,5 +168,28 @@ func loadAuth(profile string) (apiKey, region string, err error) {
 func formatOutput(cmd *cobra.Command, data any, format string, headers []string) error {
 	out := cmd.OutOrStdout()
 	formatter := output.Detect(format, output.IsTerminal())
+	if tf, ok := formatter.(*output.TableFormatter); ok {
+		tf.Quiet = quietEnabled(cmd)
+	}
 	return formatter.Format(out, data, headers)
+}
+
+func quietEnabled(cmd *cobra.Command) bool {
+	if cmd.Flags().Lookup("quiet") == nil {
+		return false
+	}
+	v, _ := cmd.Flags().GetBool("quiet")
+	return v
+}
+
+func colorDisabled(cmd *cobra.Command) bool {
+	if cmd.Flags().Lookup("no-color") != nil {
+		if v, _ := cmd.Flags().GetBool("no-color"); v {
+			return true
+		}
+	}
+	if v, ok := os.LookupEnv("NO_COLOR"); ok && v != "" {
+		return true
+	}
+	return false
 }

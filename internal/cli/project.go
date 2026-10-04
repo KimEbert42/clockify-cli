@@ -42,6 +42,15 @@ func newProjectListCmd() *cobra.Command {
 			pageSize, _ := cmd.Flags().GetInt("page-size")
 			noPagination, _ := cmd.Flags().GetBool("no-pagination")
 
+			unfiltered := statusFilter == "" && clientFilter == "" && searchFilter == ""
+			wsID := workspaceIDFromCmd(cmd)
+			if unfiltered && wsID != "" {
+				var cached []clockify.Project
+				if cachedList(cmd, wsID, compResourceProjects, &cached) && len(cached) > 0 {
+					return formatOutput(cmd, cached, outputFormat, []string{"ID", "NAME", "CLIENT_ID", "BILLABLE", "STATUS"})
+				}
+			}
+
 			apiKey, region, cfg, err := loadAuthWithConfig(profile)
 			if err != nil {
 				return err
@@ -50,6 +59,7 @@ func newProjectListCmd() *cobra.Command {
 			if cfg.WorkspaceID == "" {
 				return fmt.Errorf("no workspace configured; run 'clockify configure' or set --workspace")
 			}
+			wsID = cfg.WorkspaceID
 
 			client := api.NewClient(apiKey, api.BaseURL(region), cfg.WorkspaceID)
 			projects, pageInfo, err := fetchPaginatedProjects(context.Background(), client, api.ListProjectsOpts{
@@ -59,6 +69,11 @@ func newProjectListCmd() *cobra.Command {
 			}, page, pageSize, noPagination)
 			if err != nil {
 				return err
+			}
+
+			if unfiltered {
+				rememberCompletionNames(cmd, wsID, compResourceProjects, namesFromProjects(projects))
+				rememberList(cmd, wsID, compResourceProjects, projects)
 			}
 
 			if len(projects) == 0 && !quiet {
@@ -79,6 +94,7 @@ func newProjectListCmd() *cobra.Command {
 	cmd.Flags().String("status", "", "filter by status: ACTIVE, ARCHIVED")
 	cmd.Flags().String("client", "", "filter by client ID")
 	cmd.Flags().String("search", "", "search by project name")
+	_ = cmd.RegisterFlagCompletionFunc("client", completeClientRefC)
 	return cmd
 }
 
@@ -125,6 +141,8 @@ func newProjectGetCmd() *cobra.Command {
 	}
 	cmd.Flags().String("id", "", "project ID")
 	cmd.Flags().String("name", "", "project name (fuzzy match)")
+	_ = cmd.RegisterFlagCompletionFunc("id", completeProjectRefC)
+	_ = cmd.RegisterFlagCompletionFunc("name", completeProjectRefC)
 	return cmd
 }
 
@@ -236,6 +254,7 @@ func newProjectCreateCmd() *cobra.Command {
 	cmd.Flags().String("file", "", "JSON file with project data")
 	cmd.Flags().Bool("stdin", false, "read project data from stdin")
 	cmd.Flags().Bool("if-not-exists", false, "return existing project if one with the same name exists")
+	_ = cmd.RegisterFlagCompletionFunc("client", completeClientRefC)
 	return cmd
 }
 
@@ -374,6 +393,10 @@ func newProjectUpdateCmd() *cobra.Command {
 	cmd.Flags().Bool("archive", false, "archive the project")
 	cmd.Flags().String("file", "", "JSON file with project data")
 	cmd.Flags().Bool("stdin", false, "read project data from stdin")
+	_ = cmd.RegisterFlagCompletionFunc("id", completeProjectRefC)
+	_ = cmd.RegisterFlagCompletionFunc("name", completeProjectRefC)
+	_ = cmd.RegisterFlagCompletionFunc("new-name", completeProjectRefC)
+	_ = cmd.RegisterFlagCompletionFunc("client", completeClientRefC)
 	return cmd
 }
 
@@ -442,6 +465,8 @@ func newProjectDeleteCmd() *cobra.Command {
 	cmd.Flags().String("id", "", "project ID")
 	cmd.Flags().String("name", "", "project name (fuzzy match)")
 	cmd.Flags().Bool("confirm", false, "skip confirmation prompt")
+	_ = cmd.RegisterFlagCompletionFunc("id", completeProjectRefC)
+	_ = cmd.RegisterFlagCompletionFunc("name", completeProjectRefC)
 	return cmd
 }
 

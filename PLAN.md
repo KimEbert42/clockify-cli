@@ -2,7 +2,7 @@
 
 **Version:** 1.0.0
 **Date:** 2026-10-04
-**Status:** M7 Complete — M8 Pending
+**Status:** M8 Complete — M9 Pending
 
 ---
 
@@ -469,31 +469,49 @@ The inverse of effort is used so that less effort yields a higher score (favorin
 
 ### M8: Shell Completion & Power Features
 
+**Status:** ✅ **COMPLETE**
+**Completed:** 2026-10-04
+
 **Scope:** Shell integration, caching, CI/CD mode, stdin/file input for all commands.
 
-| Deliverable | Description |
-|-------------|-------------|
-| Shell completion | Install/output for bash, zsh, fish, powershell |
-| Dynamic completions | Cached workspace/project/tag name completion |
-| `clockify completion refresh` | Refresh cached completion data |
-| Caching layer | Local cache for workspaces, projects, tags, clients, users (TTL-based) |
-| `--no-cache` flag | Bypass cache for fresh data |
-| `clockify config clear-cache` | Clear all cached data |
-| CI/CD mode | Verified exit codes, `--quiet` + `--no-color` + `--output json` |
-| Stdin/file input | Consistent `--file` and `--stdin` across all create/update commands |
+| Deliverable | Status | Notes |
+|-------------|--------|-------|
+| Shell completion | ✅ | `completion [bash\|zsh\|fish\|powershell]` + `install --shell` + stdout output; back-compat positional form kept |
+| Dynamic completions | ✅ | Cache-backed `ValidArgsFunction`/`RegisterFlagCompletionFunc` for workspace/project/client/tag/user/`--profile`; never calls API during tab-complete |
+| `clockify completion refresh` | ✅ | Fetches all resource names into TTL cache; prints counts |
+| Caching layer | ✅ | `internal/config`: `WriteTTL`/`ReadTTL` with envelope + `CLOCKIFY_CACHE_TTL` (default 20m); list commands serve unfiltered results from cache then populate completion names |
+| `--no-cache` flag | ✅ | Global persistent flag; bypasses list cache reads (still writes completion cache after API fetch) |
+| `clockify config clear-cache` | ✅ | Existing M1 command; profile-aware |
+| CI/CD mode | ✅ | `main.go` maps `CLIError.ExitCode()` (auth=2, notfound=3, …); `--quiet` wired into table headers; `--no-color` + `NO_COLOR` supported |
+| Stdin/file input | ✅ | `time-entry create/update` accept `--file`/`--stdin` (flags override JSON); `report *` gains `--stdin` for params |
+
+**Completion install paths (XDG-aware):**
+| Shell | Default path |
+|-------|----------------|
+| bash | `$XDG_DATA_HOME/bash-completion/completions/clockify` (or `BASH_COMP_INSTALL_DIR`) |
+| zsh | `$XDG_DATA_HOME/zsh/site-functions/_clockify` |
+| fish | `$XDG_CONFIG_HOME/fish/completions/clockify.fish` |
+| powershell | `%USERPROFILE%\Documents\PowerShell\clockify.ps1` (profile line printed) |
 
 **Success Criteria:**
-- `clockify completion install --shell zsh` installs completions
-- Tab-completion shows command names, flag names, and cached resource names
-- Cache is populated on first list call, served from cache on subsequent calls
-- `clockify completion refresh` updates cached completions
-- CI pipeline uses `--output json --quiet --no-color` and checks exit codes
+- [x] `clockify completion install --shell zsh` installs completions
+- [x] Tab-completion shows command names, flag names, and cached resource names
+- [x] Cache is populated on first unfiltered list call, served from cache on subsequent calls
+- [x] `clockify completion refresh` updates cached completions
+- [x] CI pipeline can use `--output json --quiet --no-color` and check exit codes
 
-**Dependencies:** M0–M7 (all commands need to exist for completion to work).
+**Dependencies:** M0–M7 (all commands exist for completion + cache wiring).
 
-**Estimated Effort:** 1–2 days. Cobra has built-in completion support; caching layer reuses existing `config clear-cache` / cache-dir patterns from M1.
+**Actual Effort:** ~1 day.
 
-**Confidence:** High (90%). Standard Cobra completion; commands are now stable enough to generate completions against.
+**Confidence:** High (90%). Cobra completion + TTL cache reusing M1 cache-dir patterns.
+
+**Key implementation notes:**
+- Dynamic completion is cache-only (silent on miss) so tab-complete stays fast and offline-safe.
+- Filtered list calls always hit the API; only unfiltered lists are cache-served.
+- Test isolation: `setupTestConfig` now sets per-test `XDG_CACHE_HOME`.
+
+**Tags:** `v0.7.0-m6` on M6; `v0.8.0-m7` after M7; tag `v0.9.0-m8` after M8 commit.
 
 ---
 
@@ -633,11 +651,11 @@ M10 (Quality & Polish)
 | M5 | Manage tasks within projects | ✅ Done |
 | M6 | Generate time reports and export | ✅ Done |
 | M7 | Full Clockify API access | ✅ Done |
-| M8 | Shell completions, CI/CD integration | ⬜ Next |
-| M9 | Install via package managers | ⬜ Pending |
+| M8 | Shell completions, CI/CD integration | ✅ Done |
+| M9 | Install via package managers | ⬜ Next |
 | M10 | Production-quality, well-documented CLI | ⬜ Pending |
 
-**Users can already do (M0–M7):** authenticate, list/search all core entities, track time with timers, create/update/delete projects, clients, tags, tasks, invoices, schedules, expenses, custom fields, webhooks, user groups, manage time-off and approval workflows, and generate summary/detailed/weekly reports with CSV export — a functional daily-driver CLI covering the major Clockify API surface.
+**Users can already do (M0–M8):** authenticate, list/search all core entities, track time with timers, create/update/delete projects, clients, tags, tasks, invoices, schedules, expenses, custom fields, webhooks, user groups, manage time-off and approval workflows, generate summary/detailed/weekly reports with CSV export, install shell completions with dynamic cached resource names, and run non-interactive CI pipelines with machine-readable output and meaningful exit codes — a functional daily-driver CLI covering the major Clockify API surface.
 
 ---
 
@@ -720,6 +738,17 @@ M10 (Quality & Polish)
 - Interactive `--interactive` mode for create commands (nice-to-have, not in MVP)
 - Graphical output (charts, etc.)
 
+### 5.5 Decisions Made During M8
+
+| Decision | Rationale |
+|----------|-----------|
+| **Keep custom `completion` command** | Spec §8.20 requires `install`/`refresh`; cobra's default completion command is suppressed when a custom one is registered — extend ours instead of fighting cobra. |
+| **Dynamic completion is cache-only** | Tab-complete must never block on the network; cold cache returns no suggestions. Users run `completion refresh` or list commands to warm the cache. |
+| **List cache only for unfiltered lists** | Filtered results vary; caching them would serve wrong data. Unfiltered lists + `completion refresh` populate TTL cache (default 20m, `CLOCKIFY_CACHE_TTL`). |
+| **`--no-cache` bypasses list cache reads** | Always-fresh data for scripts/CI; completion names still written after successful API fetches so tab-complete stays warm. |
+| **Exit codes via `CLIError.ExitCode()`** | CI needs stable codes (auth=2, notfound=3, validation=10); `main.go` unwraps `CLIError` instead of always exiting 1. |
+| **JSON flags override file/stdin** | Explicit CLI flags win over `--file`/`--stdin` JSON for `time-entry create/update`; same precedence pattern as other write ops. |
+
 ---
 
 ## 6. Appendix: Estimated Timeline Summary
@@ -736,17 +765,17 @@ M10 (Quality & Polish)
 | M5: Tasks | 1 week | **~1 day** | ✅ **DONE** | Task management |
 | M6: Reports | 2–3 weeks | **~0.5 day** | ✅ **DONE** | Time reports & export |
 | M7: Secondary Resources | 4–5 weeks | **~1 day** | ✅ **DONE** | Full API coverage |
-| M8: Shell & Power | 2–3 weeks | *1–2 days (est.)* | ⬜ Pending | Shell integration, CI/CD |
+| M8: Shell & Power | 2–3 weeks | **~1 day** | ✅ **DONE** | Shell integration, CI/CD |
 | M9: Distribution | 2–3 weeks | *1–2 days (est.)* | ⬜ Pending | Package manager installs |
 | M10: Quality & Polish | 2–3 weeks | *1–2 days (est.)* | ⬜ Pending | Production-ready CLI |
 
 ### 6.2 Velocity Observation
 
-**Actual velocity:** ~1 day per CRUD-pattern milestone (M0, M3, M4, M5, M7); 2–3 days where multi-sprint (M1, M2); ~0.5 day for M6 once official reports API docs replaced the planned live spike. Original estimates assumed calendar weeks; actuals compress to days once foundation patterns (auth, HTTP client, output, name resolution, pagination, confirmation, file/stdin) were established in M0–M2. M7 followed the same pattern: official docs.clockify.me endpoints + M4/M5 CRUD templates.
+**Actual velocity:** ~1 day per CRUD-pattern milestone (M0, M3, M4, M5, M7, M8); 2–3 days where multi-sprint (M1, M2); ~0.5 day for M6 once official reports API docs replaced the planned live spike. Original estimates assumed calendar weeks; actuals compress to days once foundation patterns (auth, HTTP client, output, name resolution, pagination, confirmation, file/stdin) were established in M0–M2. M7 followed the same pattern: official docs.clockify.me endpoints + M4/M5 CRUD templates. M8 reused Cobra completion + M1 cache-dir patterns and shipped install/refresh/dynamic completions in ~1 day.
 
-**Revised remaining forecast:** ~3–6 days for M8–M10 (vs original 12–16 weeks).
+**Revised remaining forecast:** ~2–4 days for M9–M10 (vs original 12–16 weeks).
 
-**Cumulative actual (M0–M7):** ~10.5 development days. All packages green (286 test runs, 0 failures).
+**Cumulative actual (M0–M8):** ~11.5 development days. All packages green (`go test ./...` — 0 failures).
 
 ### 6.3 Milestone Tagging
 
@@ -759,8 +788,9 @@ M10 (Quality & Polish)
 | M4 | `v0.5.0-m4` | Write ops (tagged 2026-10-03) |
 | M5 | `v0.6.0-m5` | Task mgmt (tagged 2026-10-03) |
 | M6 | `v0.7.0-m6` | Reports & analytics (tagged 2026-10-04) |
-| M7 | `v0.8.0-m7` | Secondary resources (tag after M7 commit) |
-| M8+ | — | Tag on completion |
+| M7 | `v0.8.0-m7` | Secondary resources |
+| M8 | `v0.9.0-m8` | Shell completion & power features (tag after M8 commit) |
+| M9+ | — | Tag on completion |
 
 **First usable release (M3 complete):** Was planned weeks 10–13; actually reached after ~7 days. Users can authenticate, track time, manage projects/clients/tags/tasks, and generate reports.
 
@@ -770,4 +800,4 @@ M10 (Quality & Polish)
 
 *Post-M1 review outcomes: estimates revised downward after M0–M5 actuals; open questions on batch endpoints and API versioning resolved; report API host confirmed via spec §3.6.*
 
-*Last updated: 2026-10-04 — M7 complete (invoice, schedule, time-off, expense, custom-field, webhook, approval, group). Official docs.clockify.me endpoints implemented; spec↔API mismatches documented in M7-SPRINT-PLAN.md §6. Tags: v0.7.0-m6 created on M6 commit; tag v0.8.0-m7 after M7 is committed. M8 (Shell Completion & Power Features) is next.*`
+*Last updated: 2026-10-04 — M8 complete (completion install/refresh, TTL list cache, dynamic name completions, CI/CD exit codes, time-entry/report stdin). M9 (Distribution & Packaging) is next.*

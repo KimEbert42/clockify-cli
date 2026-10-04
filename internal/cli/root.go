@@ -42,12 +42,13 @@ Supports multiple output formats (table, JSON, CSV, YAML) and shell completion.`
 	cmd.PersistentFlags().Int("page", 1, "page number for paginated results")
 	cmd.PersistentFlags().Int("page-size", 50, "number of items per page")
 	cmd.PersistentFlags().Bool("no-pagination", false, "fetch all pages automatically")
+	cmd.PersistentFlags().Bool("no-cache", false, "bypass local cache and fetch fresh data")
 
 	cmd.AddCommand(versionCmd)
 	cmd.AddCommand(newConfigCmd())
 	cmd.AddCommand(configureCmd)
 	cmd.AddCommand(statusCmd)
-	cmd.AddCommand(completionCmd)
+	cmd.AddCommand(newCompletionCmd())
 	cmd.AddCommand(newWorkspaceCmd())
 	cmd.AddCommand(newUserCmd())
 	cmd.AddCommand(newProjectCmd())
@@ -65,6 +66,10 @@ Supports multiple output formats (table, JSON, CSV, YAML) and shell completion.`
 	cmd.AddCommand(newApprovalCmd())
 	cmd.AddCommand(newGroupCmd())
 	registerAliases(cmd)
+
+	// Dynamic completion for --workspace and resource --name/--project/--client flags.
+	_ = cmd.RegisterFlagCompletionFunc("workspace", completeWorkspaceFlagC)
+	_ = cmd.RegisterFlagCompletionFunc("profile", completeProfileFlagC)
 
 	return cmd
 }

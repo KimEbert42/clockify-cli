@@ -16,8 +16,7 @@ import (
 func setupTestConfig(t *testing.T, workspaceID string) {
 	t.Helper()
 	dir := t.TempDir()
-	os.Setenv("XDG_CONFIG_HOME", dir)
-	t.Cleanup(func() { os.Unsetenv("XDG_CONFIG_HOME") })
+	isolateCacheEnv(t, dir)
 
 	cfgPath := filepath.Join(dir, "clockify", "config.yaml")
 	os.MkdirAll(filepath.Dir(cfgPath), 0700)
@@ -26,6 +25,18 @@ default:
   region: global
   workspace_id: `+workspaceID+`
 `), 0600)
+}
+
+// isolateCacheEnv points config and cache at per-test temp dirs so list-cache
+// writes from one test cannot leak into another.
+func isolateCacheEnv(t *testing.T, dir string) {
+	t.Helper()
+	os.Setenv("XDG_CONFIG_HOME", dir)
+	os.Setenv("XDG_CACHE_HOME", filepath.Join(dir, "cache"))
+	t.Cleanup(func() {
+		os.Unsetenv("XDG_CONFIG_HOME")
+		os.Unsetenv("XDG_CACHE_HOME")
+	})
 }
 
 func TestWorkspaceListHelp(t *testing.T) {
@@ -50,9 +61,12 @@ func TestWorkspaceListHelp(t *testing.T) {
 }
 
 func TestWorkspaceListNoConfig(t *testing.T) {
-	dir := t.TempDir()
+dir := t.TempDir()
 	os.Setenv("XDG_CONFIG_HOME", dir)
+	os.Setenv("XDG_CACHE_HOME", filepath.Join(dir, "cache"))
 	defer os.Unsetenv("XDG_CONFIG_HOME")
+	defer os.Unsetenv("XDG_CACHE_HOME")
+	defer os.Unsetenv("XDG_CACHE_HOME")
 
 	cfgPath := filepath.Join(dir, "clockify", "config.yaml")
 	os.MkdirAll(filepath.Dir(cfgPath), 0700)

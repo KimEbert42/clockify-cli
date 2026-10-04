@@ -57,6 +57,15 @@ func newUserListCmd() *cobra.Command {
 			quiet, _ := cmd.Flags().GetBool("quiet")
 			statusFilter, _ := cmd.Flags().GetString("status")
 
+			unfiltered := statusFilter == ""
+			wsID := workspaceIDFromCmd(cmd)
+			if unfiltered && wsID != "" {
+				var cached []clockify.User
+				if cachedList(cmd, wsID, compResourceUsers, &cached) && len(cached) > 0 {
+					return formatOutput(cmd, cached, outputFormat, []string{"ID", "NAME", "EMAIL", "STATUS"})
+				}
+			}
+
 			apiKey, region, cfg, err := loadAuthWithConfig(profile)
 			if err != nil {
 				return err
@@ -65,6 +74,7 @@ func newUserListCmd() *cobra.Command {
 			if cfg.WorkspaceID == "" {
 				return fmt.Errorf("no workspace configured; run 'clockify configure' or set --workspace")
 			}
+			wsID = cfg.WorkspaceID
 
 			client := api.NewClient(apiKey, api.BaseURL(region), cfg.WorkspaceID)
 			users, err := client.ListUsers(context.Background(), api.ListUsersOpts{
@@ -72,6 +82,11 @@ func newUserListCmd() *cobra.Command {
 			})
 			if err != nil {
 				return err
+			}
+
+			if unfiltered {
+				rememberCompletionNames(cmd, wsID, compResourceUsers, namesFromUsers(users))
+				rememberList(cmd, wsID, compResourceUsers, users)
 			}
 
 			if len(users) == 0 && !quiet {

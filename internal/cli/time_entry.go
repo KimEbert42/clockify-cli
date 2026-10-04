@@ -258,6 +258,63 @@ func newTimeEntryCreateCmd() *cobra.Command {
 			description, _ := cmd.Flags().GetString("description")
 			tagsStr, _ := cmd.Flags().GetString("tags")
 			billable, _ := cmd.Flags().GetBool("billable")
+			filePath, _ := cmd.Flags().GetString("file")
+			stdin, _ := cmd.Flags().GetBool("stdin")
+
+			// JSON input from --file/--stdin; explicit flags override JSON fields.
+			var jsonData map[string]any
+			if filePath != "" || stdin {
+				jsonData = map[string]any{}
+				if err := readJSONInput(filePath, stdin, &jsonData); err != nil {
+					return err
+				}
+				if startStr == "" {
+					if v, ok := jsonData["start"].(string); ok {
+						startStr = v
+					}
+				}
+				if durationStr == "" {
+					if v, ok := jsonData["duration"].(string); ok {
+						durationStr = v
+					}
+				}
+				if endStr == "" {
+					if v, ok := jsonData["end"].(string); ok {
+						endStr = v
+					}
+				}
+				if projectID == "" {
+					if v, ok := jsonData["projectId"].(string); ok {
+						projectID = v
+					}
+				}
+				if taskID == "" {
+					if v, ok := jsonData["taskId"].(string); ok {
+						taskID = v
+					}
+				}
+				if description == "" {
+					if v, ok := jsonData["description"].(string); ok {
+						description = v
+					}
+				}
+				if tagsStr == "" {
+					if v, ok := jsonData["tagIds"].([]any); ok {
+						parts := make([]string, 0, len(v))
+						for _, raw := range v {
+							if s, ok := raw.(string); ok && s != "" {
+								parts = append(parts, s)
+							}
+						}
+						tagsStr = strings.Join(parts, ",")
+					}
+				}
+				if !cmd.Flags().Changed("billable") {
+					if v, ok := jsonData["billable"].(bool); ok {
+						billable = v
+					}
+				}
+			}
 
 			if startStr == "" {
 				return fmt.Errorf("must specify --start")
@@ -278,10 +335,10 @@ func newTimeEntryCreateCmd() *cobra.Command {
 
 			client := api.NewClient(apiKey, api.BaseURL(region), cfg.WorkspaceID)
 
-			// Parse start time
-			startTime, err := time.Parse(time.RFC3339, startStr)
+			// Parse start time (also accept relative dates / YYYY-MM-DD)
+			startTime, err := parseStartTimeFlexible(startStr)
 			if err != nil {
-				return fmt.Errorf("invalid start time %q: use format 2006-01-02T15:04:05Z", startStr)
+				return err
 			}
 
 			req := api.CreateTimeEntryRequest{
@@ -306,9 +363,9 @@ func newTimeEntryCreateCmd() *cobra.Command {
 				endTime := startTime.Add(time.Duration(secs) * time.Second)
 				req.End = endTime.Format(time.RFC3339)
 			} else {
-				endTime, err := time.Parse(time.RFC3339, endStr)
+				endTime, err := parseStartTimeFlexible(endStr)
 				if err != nil {
-					return fmt.Errorf("invalid end time %q: use format 2006-01-02T15:04:05Z", endStr)
+					return err
 				}
 				req.End = endTime.Format(time.RFC3339)
 			}
@@ -321,15 +378,39 @@ func newTimeEntryCreateCmd() *cobra.Command {
 			return formatOutput(cmd, entry, outputFormat, []string{"ID", "DESCRIPTION", "PROJECT", "DURATION", "START", "END", "BILLABLE"})
 		},
 	}
-	cmd.Flags().String("start", "", "start time (RFC3339 format: 2006-01-02T15:04:05Z)")
+	cmd.Flags().String("start", "", "start time (RFC3339, YYYY-MM-DD, or relative date)")
 	cmd.Flags().String("duration", "", "duration (e.g., 1h, 30m, 1h30m)")
-	cmd.Flags().String("end", "", "end time (RFC3339 format)")
+	cmd.Flags().String("end", "", "end time (RFC3339, YYYY-MM-DD, or relative date)")
 	cmd.Flags().String("project", "", "project ID")
 	cmd.Flags().String("task", "", "task ID")
 	cmd.Flags().String("description", "", "description")
 	cmd.Flags().String("tags", "", "tag IDs (comma-separated)")
 	cmd.Flags().Bool("billable", false, "mark as billable")
+	cmd.Flags().String("file", "", "JSON file with time entry data")
+	cmd.Flags().Bool("stdin", false, "read time entry data from stdin")
+	_ = cmd.RegisterFlagCompletionFunc("project", completeProjectRefC)
+	_ = cmd.RegisterFlagCompletionFunc("tags", completeTagRefC)
 	return cmd
+}
+
+func parseStartTimeFlexible(s string) (time.Time, error) {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return time.Time{}, fmt.Errorf("empty date/time value")
+	}
+	if duration.IsRelativeDate(s) {
+		return duration.ParseRelativeDate(s, "monday")
+	}
+	if t, err := time.Parse(time.RFC3339, s); err == nil {
+		return t, nil
+	}
+	if t, err := time.Parse("2006-01-02", s); err == nil {
+		return t, nil
+	}
+	if t, err := time.Parse("2006-01-02T15:04:05", s); err == nil {
+		return t, nil
+	}
+	return time.Time{}, fmt.Errorf("invalid date/time %q: use RFC3339, YYYY-MM-DD, or relative date", s)
 }
 
 func newTimeEntryUpdateCmd() *cobra.Command {
@@ -348,6 +429,62 @@ func newTimeEntryUpdateCmd() *cobra.Command {
 			description, _ := cmd.Flags().GetString("description")
 			tagsStr, _ := cmd.Flags().GetString("tags")
 			billable, _ := cmd.Flags().GetBool("billable")
+			filePath, _ := cmd.Flags().GetString("file")
+			stdin, _ := cmd.Flags().GetBool("stdin")
+
+			// JSON input first; flags override JSON when both provided.
+			jsonStart, jsonDuration, jsonEnd := "", "", ""
+			jsonProject, jsonTask, jsonDescription, jsonTags := "", "", "", ""
+			var jsonBillable *bool
+			if filePath != "" || stdin {
+				var jsonData map[string]any
+				if err := readJSONInput(filePath, stdin, &jsonData); err != nil {
+					return err
+				}
+				jsonStart, _ = jsonData["start"].(string)
+				jsonDuration, _ = jsonData["duration"].(string)
+				jsonEnd, _ = jsonData["end"].(string)
+				jsonProject, _ = jsonData["projectId"].(string)
+				jsonTask, _ = jsonData["taskId"].(string)
+				jsonDescription, _ = jsonData["description"].(string)
+				if v, ok := jsonData["tagIds"].([]any); ok {
+					parts := make([]string, 0, len(v))
+					for _, raw := range v {
+						if s, ok := raw.(string); ok && s != "" {
+							parts = append(parts, s)
+						}
+					}
+					jsonTags = strings.Join(parts, ",")
+				}
+				if v, ok := jsonData["billable"].(bool); ok {
+					jsonBillable = &v
+				}
+			}
+
+			if !cmd.Flags().Changed("start") && jsonStart != "" {
+				startStr = jsonStart
+			}
+			if !cmd.Flags().Changed("duration") && jsonDuration != "" {
+				durationStr = jsonDuration
+			}
+			if !cmd.Flags().Changed("end") && jsonEnd != "" {
+				endStr = jsonEnd
+			}
+			if !cmd.Flags().Changed("project") && jsonProject != "" {
+				projectID = jsonProject
+			}
+			if !cmd.Flags().Changed("task") && jsonTask != "" {
+				taskID = jsonTask
+			}
+			if !cmd.Flags().Changed("description") && jsonDescription != "" {
+				description = jsonDescription
+			}
+			if !cmd.Flags().Changed("tags") && jsonTags != "" {
+				tagsStr = jsonTags
+			}
+			if !cmd.Flags().Changed("billable") && jsonBillable != nil {
+				billable = *jsonBillable
+			}
 
 			if id == "" {
 				return fmt.Errorf("must specify --id")
@@ -381,9 +518,9 @@ func newTimeEntryUpdateCmd() *cobra.Command {
 
 			// Apply updates
 			if startStr != "" {
-				startTime, err := time.Parse(time.RFC3339, startStr)
+				startTime, err := parseStartTimeFlexible(startStr)
 				if err != nil {
-					return fmt.Errorf("invalid start time %q: use format 2006-01-02T15:04:05Z", startStr)
+					return err
 				}
 				req.Start = startTime.Format(time.RFC3339)
 			}
@@ -404,7 +541,7 @@ func newTimeEntryUpdateCmd() *cobra.Command {
 				req.TagIDs = strings.Split(tagsStr, ",")
 			}
 
-			if cmd.Flags().Changed("billable") {
+			if cmd.Flags().Changed("billable") || jsonBillable != nil {
 				req.Billable = billable
 			}
 
@@ -418,9 +555,9 @@ func newTimeEntryUpdateCmd() *cobra.Command {
 				endTime := startTime.Add(time.Duration(secs) * time.Second)
 				req.End = endTime.Format(time.RFC3339)
 			} else if endStr != "" {
-				endTime, err := time.Parse(time.RFC3339, endStr)
+				endTime, err := parseStartTimeFlexible(endStr)
 				if err != nil {
-					return fmt.Errorf("invalid end time %q: use format 2006-01-02T15:04:05Z", endStr)
+					return err
 				}
 				req.End = endTime.Format(time.RFC3339)
 			} else if existing.TimeInterval.End != nil {
@@ -436,14 +573,18 @@ func newTimeEntryUpdateCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().String("id", "", "time entry ID")
-	cmd.Flags().String("start", "", "start time (RFC3339 format)")
+	cmd.Flags().String("start", "", "start time (RFC3339, YYYY-MM-DD, or relative date)")
 	cmd.Flags().String("duration", "", "duration (e.g., 1h, 30m, 1h30m)")
-	cmd.Flags().String("end", "", "end time (RFC3339 format)")
+	cmd.Flags().String("end", "", "end time (RFC3339, YYYY-MM-DD, or relative date)")
 	cmd.Flags().String("project", "", "project ID")
 	cmd.Flags().String("task", "", "task ID")
 	cmd.Flags().String("description", "", "description")
 	cmd.Flags().String("tags", "", "tag IDs (comma-separated)")
 	cmd.Flags().Bool("billable", false, "mark as billable")
+	cmd.Flags().String("file", "", "JSON file with time entry data")
+	cmd.Flags().Bool("stdin", false, "read time entry data from stdin")
+	_ = cmd.RegisterFlagCompletionFunc("project", completeProjectRefC)
+	_ = cmd.RegisterFlagCompletionFunc("tags", completeTagRefC)
 	return cmd
 }
 

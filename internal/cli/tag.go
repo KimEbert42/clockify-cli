@@ -39,6 +39,15 @@ func newTagListCmd() *cobra.Command {
 			pageSize, _ := cmd.Flags().GetInt("page-size")
 			noPagination, _ := cmd.Flags().GetBool("no-pagination")
 
+			unfiltered := searchFilter == ""
+			wsID := workspaceIDFromCmd(cmd)
+			if unfiltered && wsID != "" {
+				var cached []clockify.Tag
+				if cachedList(cmd, wsID, compResourceTags, &cached) && len(cached) > 0 {
+					return formatOutput(cmd, cached, outputFormat, []string{"ID", "NAME", "COLOR"})
+				}
+			}
+
 			apiKey, region, cfg, err := loadAuthWithConfig(profile)
 			if err != nil {
 				return err
@@ -47,6 +56,7 @@ func newTagListCmd() *cobra.Command {
 			if cfg.WorkspaceID == "" {
 				return fmt.Errorf("no workspace configured; run 'clockify configure' or set --workspace")
 			}
+			wsID = cfg.WorkspaceID
 
 			client := api.NewClient(apiKey, api.BaseURL(region), cfg.WorkspaceID)
 			tags, pageInfo, err := fetchPaginatedTags(context.Background(), client, api.ListTagsOpts{
@@ -54,6 +64,11 @@ func newTagListCmd() *cobra.Command {
 			}, page, pageSize, noPagination)
 			if err != nil {
 				return err
+			}
+
+			if unfiltered {
+				rememberCompletionNames(cmd, wsID, compResourceTags, namesFromTags(tags))
+				rememberList(cmd, wsID, compResourceTags, tags)
 			}
 
 			if len(tags) == 0 && !quiet {
@@ -255,6 +270,9 @@ func newTagUpdateCmd() *cobra.Command {
 	cmd.Flags().Bool("archive", false, "archive the tag")
 	cmd.Flags().String("file", "", "JSON file with tag data")
 	cmd.Flags().Bool("stdin", false, "read tag data from stdin")
+	_ = cmd.RegisterFlagCompletionFunc("id", completeTagRefC)
+	_ = cmd.RegisterFlagCompletionFunc("name", completeTagRefC)
+	_ = cmd.RegisterFlagCompletionFunc("new-name", completeTagRefC)
 	return cmd
 }
 
@@ -323,6 +341,8 @@ func newTagDeleteCmd() *cobra.Command {
 	cmd.Flags().String("id", "", "tag ID")
 	cmd.Flags().String("name", "", "tag name (fuzzy match)")
 	cmd.Flags().Bool("confirm", false, "skip confirmation prompt")
+	_ = cmd.RegisterFlagCompletionFunc("id", completeTagRefC)
+	_ = cmd.RegisterFlagCompletionFunc("name", completeTagRefC)
 	return cmd
 }
 

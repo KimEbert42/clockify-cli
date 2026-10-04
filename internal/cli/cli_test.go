@@ -131,7 +131,9 @@ func TestProfileOrDefault(t *testing.T) {
 func TestStatusNoAPIKey(t *testing.T) {
 	dir := t.TempDir()
 	os.Setenv("XDG_CONFIG_HOME", dir)
+	os.Setenv("XDG_CACHE_HOME", filepath.Join(dir, "cache"))
 	defer os.Unsetenv("XDG_CONFIG_HOME")
+	defer os.Unsetenv("XDG_CACHE_HOME")
 
 	cfgPath := filepath.Join(dir, "clockify", "config.yaml")
 	os.MkdirAll(filepath.Dir(cfgPath), 0700)
@@ -163,7 +165,9 @@ default:
 func TestStatusJSONOutput(t *testing.T) {
 	dir := t.TempDir()
 	os.Setenv("XDG_CONFIG_HOME", dir)
+	os.Setenv("XDG_CACHE_HOME", filepath.Join(dir, "cache"))
 	defer os.Unsetenv("XDG_CONFIG_HOME")
+	defer os.Unsetenv("XDG_CACHE_HOME")
 
 	cfgPath := filepath.Join(dir, "clockify", "config.yaml")
 	os.MkdirAll(filepath.Dir(cfgPath), 0700)
@@ -206,7 +210,9 @@ default:
 func TestConfigListProfiles(t *testing.T) {
 	dir := t.TempDir()
 	os.Setenv("XDG_CONFIG_HOME", dir)
+	os.Setenv("XDG_CACHE_HOME", filepath.Join(dir, "cache"))
 	defer os.Unsetenv("XDG_CONFIG_HOME")
+	defer os.Unsetenv("XDG_CACHE_HOME")
 
 	cfgPath := filepath.Join(dir, "clockify", "config.yaml")
 	os.MkdirAll(filepath.Dir(cfgPath), 0700)
@@ -247,7 +253,9 @@ profiles:
 func TestConfigDeleteProfile(t *testing.T) {
 	dir := t.TempDir()
 	os.Setenv("XDG_CONFIG_HOME", dir)
+	os.Setenv("XDG_CACHE_HOME", filepath.Join(dir, "cache"))
 	defer os.Unsetenv("XDG_CONFIG_HOME")
+	defer os.Unsetenv("XDG_CACHE_HOME")
 
 	cfgPath := filepath.Join(dir, "clockify", "config.yaml")
 	os.MkdirAll(filepath.Dir(cfgPath), 0700)
@@ -290,7 +298,9 @@ profiles:
 func TestConfigSetPreservesProfiles(t *testing.T) {
 	dir := t.TempDir()
 	os.Setenv("XDG_CONFIG_HOME", dir)
+	os.Setenv("XDG_CACHE_HOME", filepath.Join(dir, "cache"))
 	defer os.Unsetenv("XDG_CONFIG_HOME")
+	defer os.Unsetenv("XDG_CACHE_HOME")
 
 	// Ensure env vars don't interfere
 	for _, k := range []string{"CLOCKIFY_REGION", "CLOCKIFY_OUTPUT", "CLOCKIFY_WORKSPACE_ID", "CLOCKIFY_API_KEY"} {

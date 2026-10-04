@@ -40,6 +40,15 @@ func newClientListCmd() *cobra.Command {
 			pageSize, _ := cmd.Flags().GetInt("page-size")
 			noPagination, _ := cmd.Flags().GetBool("no-pagination")
 
+			unfiltered := searchFilter == ""
+			wsID := workspaceIDFromCmd(cmd)
+			if unfiltered && wsID != "" {
+				var cached []clockify.Client
+				if cachedList(cmd, wsID, compResourceClients, &cached) && len(cached) > 0 {
+					return formatOutput(cmd, cached, outputFormat, []string{"ID", "NAME", "EMAIL"})
+				}
+			}
+
 			apiKey, region, cfg, err := loadAuthWithConfig(profile)
 			if err != nil {
 				return err
@@ -48,6 +57,7 @@ func newClientListCmd() *cobra.Command {
 			if cfg.WorkspaceID == "" {
 				return fmt.Errorf("no workspace configured; run 'clockify configure' or set --workspace")
 			}
+			wsID = cfg.WorkspaceID
 
 			client := api.NewClient(apiKey, api.BaseURL(region), cfg.WorkspaceID)
 			clients, pageInfo, err := fetchPaginatedClients(context.Background(), client, api.ListClientsOpts{
@@ -55,6 +65,11 @@ func newClientListCmd() *cobra.Command {
 			}, page, pageSize, noPagination)
 			if err != nil {
 				return err
+			}
+
+			if unfiltered {
+				rememberCompletionNames(cmd, wsID, compResourceClients, namesFromClients(clients))
+				rememberList(cmd, wsID, compResourceClients, clients)
 			}
 
 			if len(clients) == 0 && !quiet {
@@ -108,6 +123,7 @@ func newClientGetCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().String("id", "", "client ID")
+	_ = cmd.RegisterFlagCompletionFunc("id", completeClientRefC)
 	return cmd
 }
 
@@ -330,6 +346,9 @@ func newClientUpdateCmd() *cobra.Command {
 	cmd.Flags().Bool("archive", false, "archive the client")
 	cmd.Flags().String("file", "", "JSON file with client data")
 	cmd.Flags().Bool("stdin", false, "read client data from stdin")
+	_ = cmd.RegisterFlagCompletionFunc("id", completeClientRefC)
+	_ = cmd.RegisterFlagCompletionFunc("name", completeClientRefC)
+	_ = cmd.RegisterFlagCompletionFunc("new-name", completeClientRefC)
 	return cmd
 }
 
@@ -398,6 +417,8 @@ func newClientDeleteCmd() *cobra.Command {
 	cmd.Flags().String("id", "", "client ID")
 	cmd.Flags().String("name", "", "client name (fuzzy match)")
 	cmd.Flags().Bool("confirm", false, "skip confirmation prompt")
+	_ = cmd.RegisterFlagCompletionFunc("id", completeClientRefC)
+	_ = cmd.RegisterFlagCompletionFunc("name", completeClientRefC)
 	return cmd
 }
 

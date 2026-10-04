@@ -128,6 +128,7 @@ func newTaskListCmd() *cobra.Command {
 	}
 	cmd.Flags().String("project", "", "project ID or name (required)")
 	cmd.Flags().Bool("is-active", false, "show only active tasks")
+	_ = cmd.RegisterFlagCompletionFunc("project", completeProjectRefC)
 	return cmd
 }
 
@@ -268,6 +269,8 @@ func newTaskCreateCmd() *cobra.Command {
 	cmd.Flags().String("file", "", "JSON file with task data")
 	cmd.Flags().Bool("stdin", false, "read task data from stdin")
 	cmd.Flags().Bool("if-not-exists", false, "return existing task if one with the same name exists in the project")
+	_ = cmd.RegisterFlagCompletionFunc("project", completeProjectRefC)
+	_ = cmd.RegisterFlagCompletionFunc("assignee", completeUserRefC)
 	return cmd
 }
 
@@ -415,6 +418,8 @@ func newTaskUpdateCmd() *cobra.Command {
 	cmd.Flags().Bool("billable", false, "task is billable")
 	cmd.Flags().String("file", "", "JSON file with task data")
 	cmd.Flags().Bool("stdin", false, "read task data from stdin")
+	_ = cmd.RegisterFlagCompletionFunc("project", completeProjectRefC)
+	_ = cmd.RegisterFlagCompletionFunc("assignee", completeUserRefC)
 	return cmd
 }
 
@@ -480,6 +485,7 @@ func newTaskDeleteCmd() *cobra.Command {
 	cmd.Flags().String("project", "", "project ID or name (required)")
 	cmd.Flags().String("id", "", "task ID (required)")
 	cmd.Flags().Bool("confirm", false, "skip confirmation prompt")
+	_ = cmd.RegisterFlagCompletionFunc("project", completeProjectRefC)
 	return cmd
 }
 
