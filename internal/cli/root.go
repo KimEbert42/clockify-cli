@@ -1,6 +1,9 @@
 package cli
 
 import (
+	"encoding/json"
+	"runtime"
+
 	"github.com/spf13/cobra"
 )
 
@@ -14,6 +17,25 @@ func SetBuildInfo(version, commit, date string) {
 	buildVersion = version
 	buildCommit = commit
 	buildDate = date
+}
+
+// BuildInfo returns the build metadata injected at compile time.
+type BuildInfo struct {
+	Version string `json:"version" yaml:"version"`
+	Commit  string `json:"commit" yaml:"commit"`
+	Date    string `json:"date" yaml:"date"`
+	Go      string `json:"go" yaml:"go"`
+	Platform string `json:"platform" yaml:"platform"`
+}
+
+func GetBuildInfo() BuildInfo {
+	return BuildInfo{
+		Version:  buildVersion,
+		Commit:   buildCommit,
+		Date:     buildDate,
+		Go:       runtime.Version(),
+		Platform: runtime.GOOS + "/" + runtime.GOARCH,
+	}
 }
 
 var rootCmd = newRootCmd()
@@ -44,7 +66,12 @@ Supports multiple output formats (table, JSON, CSV, YAML) and shell completion.`
 	cmd.PersistentFlags().Bool("no-pagination", false, "fetch all pages automatically")
 	cmd.PersistentFlags().Bool("no-cache", false, "bypass local cache and fetch fresh data")
 
-	cmd.AddCommand(versionCmd)
+	// Passive update check — never fails the primary command.
+	cmd.PersistentPreRun = func(c *cobra.Command, args []string) {
+		maybeCheckForUpdate(c)
+	}
+
+	cmd.AddCommand(versionCmd())
 	cmd.AddCommand(newConfigCmd())
 	cmd.AddCommand(configureCmd)
 	cmd.AddCommand(statusCmd)
@@ -65,6 +92,7 @@ Supports multiple output formats (table, JSON, CSV, YAML) and shell completion.`
 	cmd.AddCommand(newWebhookCmd())
 	cmd.AddCommand(newApprovalCmd())
 	cmd.AddCommand(newGroupCmd())
+	cmd.AddCommand(newUpdateCmd())
 	registerAliases(cmd)
 
 	// Dynamic completion for --workspace and resource --name/--project/--client flags.
@@ -78,10 +106,29 @@ func Execute() error {
 	return rootCmd.Execute()
 }
 
-var versionCmd = &cobra.Command{
-	Use:   "version",
-	Short: "Show version information",
-	Run: func(cmd *cobra.Command, args []string) {
-		cmd.Printf("clockify %s (%s) built on %s\n", buildVersion, buildCommit, buildDate)
-	},
+func versionCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "version",
+		Short: "Show version information",
+		Long: `Show version, commit, build date, Go version, and platform.
+
+Examples:
+  clockify version
+  clockify version --output json`,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			info := GetBuildInfo()
+			format, _ := cmd.Flags().GetString("output")
+			if format == "json" {
+				enc := json.NewEncoder(cmd.OutOrStdout())
+				enc.SetIndent("", "  ")
+				return enc.Encode(info)
+			}
+			cmd.Printf("clockify %s\n", info.Version)
+			cmd.Printf("commit:     %s\n", info.Commit)
+			cmd.Printf("built:      %s\n", info.Date)
+			cmd.Printf("go:         %s\n", info.Go)
+			cmd.Printf("platform:   %s\n", info.Platform)
+			return nil
+		},
+	}
 }

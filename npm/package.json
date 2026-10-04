@@ -1,0 +1,35 @@
+{
+  "name": "clockify-cli",
+  "version": "0.0.0-development",
+  "description": "Command-line interface for Clockify time tracking",
+  "bin": {
+    "clockify": "bin/clockify"
+  },
+  "scripts": {
+    "postinstall": "node install.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/kim/clockify-cli.git"
+  },
+  "keywords": [
+    "clockify",
+    "time-tracking",
+    "cli",
+    "time-entry"
+  ],
+  "author": "kim",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18"
+  },
+  "os": [
+    "linux",
+    "darwin",
+    "win32"
+  ],
+  "cpu": [
+    "x64",
+    "arm64"
+  ]
+}

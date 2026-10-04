@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/spf13/viper"
 	"gopkg.in/yaml.v3"
@@ -16,6 +17,8 @@ type Config struct {
 	DateFormat  string `yaml:"date_format" mapstructure:"date_format"`
 	TimeFormat  string `yaml:"time_format" mapstructure:"time_format"`
 	WeekStarts  string `yaml:"week_starts" mapstructure:"week_starts"`
+	// AutoUpdate: empty = enabled (default); "false"/"0"/"no"/"off" disables passive checks.
+	AutoUpdate string `yaml:"auto_update,omitempty" mapstructure:"auto_update"`
 }
 
 type ProfileConfig struct {
@@ -76,6 +79,35 @@ func mergeConfig(base, override *Config) {
 	}
 	if override.WeekStarts != "" {
 		base.WeekStarts = override.WeekStarts
+	}
+	if override.AutoUpdate != "" {
+		base.AutoUpdate = override.AutoUpdate
+	}
+}
+
+// AutoUpdateEnabled reports whether passive update checks are enabled.
+// Empty means enabled (default).
+func (c *Config) AutoUpdateEnabled() bool {
+	if c == nil {
+		return true
+	}
+	switch strings.ToLower(strings.TrimSpace(c.AutoUpdate)) {
+	case "false", "0", "no", "off":
+		return false
+	default:
+		return true
+	}
+}
+
+// ParseAutoUpdate normalizes a user-provided auto_update value.
+func ParseAutoUpdate(value string) (string, error) {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "true", "1", "yes", "on":
+		return "true", nil
+	case "false", "0", "no", "off":
+		return "false", nil
+	default:
+		return "", fmt.Errorf("auto_update must be true or false, got %q", value)
 	}
 }
 

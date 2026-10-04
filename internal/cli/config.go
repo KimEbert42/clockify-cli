@@ -33,6 +33,14 @@ func printConfig(w io.Writer, name string, cfg *config.Config) {
 	fmt.Fprintf(w, "  Date Format: %s\n", cfg.DateFormat)
 	fmt.Fprintf(w, "  Time Format: %s\n", cfg.TimeFormat)
 	fmt.Fprintf(w, "  Week Starts: %s\n", cfg.WeekStarts)
+	fmt.Fprintf(w, "  Auto Update: %s\n", boolLabel(cfg.AutoUpdateEnabled()))
+}
+
+func boolLabel(enabled bool) string {
+	if enabled {
+		return "true"
+	}
+	return "false"
 }
 
 func newConfigListCmd() *cobra.Command {
@@ -100,6 +108,8 @@ func newConfigGetCmd() *cobra.Command {
 				cmd.Println(cfg.TimeFormat)
 			case "week_starts":
 				cmd.Println(cfg.WeekStarts)
+			case "auto_update":
+				cmd.Println(boolLabel(cfg.AutoUpdateEnabled()))
 			default:
 				return fmt.Errorf("unknown config key: %s", key)
 			}
@@ -152,6 +162,12 @@ func newConfigSetCmd() *cobra.Command {
 				cfg.TimeFormat = value
 			case "week_starts":
 				cfg.WeekStarts = value
+			case "auto_update":
+				norm, err := config.ParseAutoUpdate(value)
+				if err != nil {
+					return err
+				}
+				cfg.AutoUpdate = norm
 			default:
 				return fmt.Errorf("unknown config key: %s", key)
 			}
@@ -210,6 +226,8 @@ func newConfigUnsetCmd() *cobra.Command {
 				cfg.TimeFormat = "15:04"
 			case "week_starts":
 				cfg.WeekStarts = "MONDAY"
+			case "auto_update":
+				cfg.AutoUpdate = ""
 			default:
 				return fmt.Errorf("unknown config key: %s", key)
 			}

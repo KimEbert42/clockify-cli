@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"os"
 
 	"github.com/kim/clockify-cli/internal/cli"
@@ -17,6 +18,7 @@ var (
 func main() {
 	cli.SetBuildInfo(version, commit, date)
 	if err := cli.Execute(); err != nil {
+		fmt.Fprintln(os.Stderr, "Error:", err)
 		var cliErr *clierrors.CLIError
 		if errors.As(err, &cliErr) {
 			os.Exit(cliErr.ExitCode())

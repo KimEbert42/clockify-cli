@@ -2,7 +2,7 @@
 
 **Version:** 1.0.0
 **Date:** 2026-10-04
-**Status:** M8 Complete — M9 Pending
+**Status:** M9 Complete — M11 Pending (then M10)
 
 ---
 
@@ -39,12 +39,12 @@ The inverse of effort is used so that less effort yields a higher score (favorin
 |----------------|---------------|----------------|
 | Production-quality CLI | Foundation, Polish | M0, M9, M10 |
 | Discoverability | Foundation, Polish | M0, M8, M10 |
-| Progressive Disclosure | Foundation, Core | M0, M3 |
+| Progressive Disclosure | Foundation, Core, Ergonomics | M0, M3, M11 |
 | Pipe-friendly | Foundation, Core | M0, M3, M8 |
 | Idempotent by default | Core, Write Ops | M3, M4 |
 | Fast startup | Foundation, Polish | M0, M10 |
 | All major API resources | Full Coverage | M4–M7 |
-| Excellent developer experience | All themes | M0, M3, M8, M10 |
+| Excellent developer experience | All themes | M0, M3, M8, M10, M11 |
 
 ---
 
@@ -519,31 +519,60 @@ The inverse of effort is used so that less effort yields a higher score (favorin
 
 **Scope:** Cross-platform builds, package manager distribution, auto-update, CI/CD pipeline.
 
-| Deliverable | Description |
-|-------------|-------------|
-| Cross-compilation | Linux x86_64/ARM64, macOS universal, Windows x86_64 |
-| GitHub Actions | Build, test, release pipeline |
-| Homebrew formula | `brew install clockify/tap/clockify` |
-| npm package | `npm install -g clockify-cli` wrapper |
-| Go install | `go install github.com/clockify/cli@latest` |
-| `clockify update` | Self-update from GitHub Releases |
-| `clockify version` | Show version, commit, build date, platform |
-| Semantic versioning | Git tags trigger release builds |
-| Auto-update check | First command of the day checks GitHub Releases (cached 24h) |
+**Status:** ✅ **COMPLETE**
+**Completed:** 2026-10-04
+**Sprint plan:** `M9-SPRINT-PLAN.md`
+
+| Deliverable | Status | Notes |
+|-------------|--------|-------|
+| Cross-compilation | ✅ | GoReleaser: linux amd64/arm64, darwin universal, windows amd64; archives + sha256 checksums |
+| GitHub Actions | ✅ | `.github/workflows/ci.yml` (vet/test/build) + `release.yml` (goreleaser on `v*` tags) |
+| Homebrew formula | ✅ | GoReleaser `brews` → `kim/homebrew-tap` Formula; needs tap repo + `HOMEBREW_TAP_GITHUB_TOKEN` |
+| npm package | ✅ | `npm/` wrapper (`postinstall` downloads release binary); scoped name if unscoped taken |
+| Go install | ✅ | `go install github.com/kim/clockify-cli/cmd/clockify@latest` (real module path — not spec's `clockify/cli`) |
+| `clockify update` | ✅ | `update`, `--check`, `--version`; downloads matching GH Release asset and replaces binary |
+| `clockify version` | ✅ | version/commit/built/go/platform + `--output json` |
+| Semantic versioning | ✅ | Tag push → `release.yml` → GoReleaser; tags `v0.8.0-m7`, `v0.9.0-m8` created on prior commits |
+| Auto-update check | ✅ | First command of day; 24h TTL cache; skipped when quiet/json/CI/`CLOCKIFY_NO_UPDATE_CHECK`/`auto_update=false`/dev build |
+| ldflags fix | ✅ | Makefile injects `main.version/commit/date`; snapshot binary reports real version (was clobbered to `dev`) |
+| Error printing | ✅ | `main.go` prints errors to stderr (required for `update --check` failures to be visible) |
+
+**Install paths (documented):**
+
+| Method | Command |
+|--------|---------|
+| go install | `go install github.com/kim/clockify-cli/cmd/clockify@latest` |
+| Homebrew | `brew tap kim/tap && brew install clockify` (after tap repo exists) |
+| npm | `npm install -g clockify-cli` or `npm install -g @kim/clockify-cli` |
+| Binary | GitHub Releases archives + `clockify update` |
+
+**Config:** `auto_update` key (`clockify config set auto_update false`); env `CLOCKIFY_NO_UPDATE_CHECK=1`; CI env auto-skips.
 
 **Success Criteria:**
-- `go install` produces working binary
-- `brew install` works on macOS
-- `clockify update` upgrades to latest version
-- `clockify version` shows correct build metadata
-- GitHub Actions releases binaries for all platforms on tag push
-- Binary size <20MB, startup <50ms
+- [x] `go install` produces working binary (module path documented)
+- [x] `clockify version` shows correct build metadata (ldflags fixed; JSON output)
+- [x] GitHub Actions release workflow present; goreleaser snapshot builds all platforms
+- [x] Binary size <20MB (linux/amd64 ~3.9MB), startup <50ms (measured ~10ms)
+- [x] `clockify update` / `--check` / `--version` implemented; unit-tested with httptest
+- [x] Auto-update check cache + skip rules unit-tested
+- [x] `go test ./...` green
+- [ ] `brew install` works on macOS — **blocked on tap repo + first published release**
+- [ ] Live `clockify update` upgrades to latest — **blocked on public GitHub repo + first release tag**
 
 **Dependencies:** M0–M8 (feature-complete CLI needed for distribution).
 
-**Estimated Effort:** 1–2 days. Standard Go build/release patterns (goreleaser or hand-rolled GitHub Actions).
+**Actual Effort:** ~1 day (infra + self-update + npm scaffold; live publish awaits remote).
 
-**Confidence:** High (90%). Well-trodden Go CLI distribution path.
+**Confidence:** High (90%). GoReleaser + Cobra patterns are standard; remaining work is operational (create GitHub repo, tap, publish).
+
+**Key implementation notes:**
+- Module path is `github.com/kim/clockify-cli` (spec §7.2's `github.com/clockify/cli` is incorrect).
+- Dev builds (`version=dev`) refuse self-update with an actionable error.
+- Passive update check never fails the primary command; hint goes to stderr.
+- GoReleaser universal darwin assets are named `clockify_*_darwin_all.tar.gz`; `FindAsset` handles that fallback.
+- Homebrew/npm live E2E requires a git remote (none configured at implementation time).
+
+**Tags:** `v0.8.0-m7` on `3168f3e`; `v0.9.0-m8` on `969ca42`; `v0.10.0-m9` after M9 commit.
 
 ---
 
@@ -577,6 +606,42 @@ The inverse of effort is used so that less effort yields a higher score (favorin
 
 ---
 
+### M11: Daily-Driver Ergonomics
+
+**Scope:** Close the everyday-UX gaps identified in the 2026-10-04 UX review. The CLI is strong on API coverage, reports, output formats, profiles/regions and scripting, but the daily start/stop/fix-up loop still requires IDs and RFC3339 timestamps. M11 makes that loop fast without regressing pipe-friendliness.
+
+**Sequencing:** Numbered M11 to keep existing milestone numbers, tags and sprint plans stable, but scheduled **after M9 and before M10** so M10's README, man pages and integration tests document the final UX.
+
+| Deliverable | Description | Priority |
+|-------------|-------------|----------|
+| Names everywhere | `time-entry start/create/update/list` accept project, task and tag **names or IDs** (`--project`, `--task`, `--tags`). Reuse `resolveProjectRef` / `resolveTaskByName` from `task.go`; add `resolveTagRefs` for comma-separated tags. ID fast path first, then name; ambiguous names fail with E-code listing candidates. Audit every remaining ID-only flag (`approval`, `schedule`, `invoice`, etc.) for the same treatment. | P0 |
+| Human time input | `--start`/`--end` on `time-entry create/update/start/stop` accept `HH:MM`, `H:MMam/pm`, `yesterday 09:00`, relative offsets (`-15m`, `+1h`), `now`, and full RFC3339 (unchanged). Local timezone from config/OS; converted to UTC for the API. Lives in `pkg/duration` next to `ParseRelativeDate`. | P0 |
+| Interactive pickers | When stdout/stdin is a TTY and `--project`/`--task`/`--tags`/`--description` are omitted on `start`/`create`, offer fuzzy-search pickers (cache-backed lists from M8). Opt-in via `-i/--interactive` or `interactive: true` config. **Never** prompts when non-TTY, `--confirm`, `--quiet`, `CI` env set, or `--output` is json/csv/yaml. | P0 |
+| `time-entry clone` | `clone [id\|last]` copies project/task/tags/description/billable from an entry and starts a new timer; `--start/--end` creates a completed entry instead; any flag overrides the copied field. | P1 |
+| `time-entry split` | `split <id> --at 12:00 [--at 15:00 ...]` divides an entry at the given times: updates the original's end and creates the remaining pieces with identical metadata. Validates split points fall inside the entry. | P1 |
+| `current` / `last` selectors | `time-entry get/update/delete/stop` accept `current` (running timer) and `last` (most recent completed entry) in place of an ID. | P1 |
+| Multi-entry update | `time-entry update <id> [<id>...]` applies the same flags to several entries; also accepts IDs from stdin (`clockify le --output json \| jq ... \| clockify time-entry update --stdin-ids --project X`). Confirmation prompt summarizes count unless `--confirm`. | P1 |
+| `in` / `out` aliases | Top-level `clockify in` → `time-entry start`, `clockify out` → `time-entry stop`, alongside existing `le`/`lp`/`lw`. | P2 |
+| Report presets | `report today\|yesterday\|this-week\|last-week\|this-month\|last-month` shortcuts mapping to `report summary` (or `--type detailed`) with the matching `--start/--end`; all existing filter flags still apply. | P2 |
+| Task shortcuts | `task done <task> --project P` (sets `status=DONE`) and `task quick-add <name> --project P` (create with defaults, prints ID only under `--quiet`). | P2 |
+| Template output | `--output template --template '{{.Description}} {{.Duration}}'` (Go `text/template`) for ad-hoc formatting without `jq`; plus `--output ids` shorthand. | P3 |
+
+**Success Criteria:**
+- `clockify in --project "Website Redesign" --task "QA" --tags "billable,frontend"` starts a timer with no IDs typed
+- `clockify time-entry create --start 9:00 --end 10:30 --project Website` creates a correct entry in local time
+- `clockify in` with no flags on a TTY (with `-i` or config) opens pickers; the same command in a pipe or with `CI=1` fails fast with an actionable missing-flag error — no hangs
+- `clone last`, `split <id> --at 12:00`, `stop current`, `delete last` work end-to-end
+- Every new flag/command has dynamic completion wired through the M8 cache
+- Existing scripts using IDs and RFC3339 timestamps keep working unchanged (backward compatible)
+
+**Dependencies:** M3 (time entry), M5 (task resolution helpers), M8 (cache + completion). Independent of M9; should precede M10.
+
+**Estimated Effort:** 2–3 days. Name resolution and presets reuse existing patterns (~0.5 day); time parsing with timezone handling (~0.5 day); interactive pickers incl. TTY/CI guards (~1 day); clone/split/selectors/multi-update (~0.5–1 day).
+
+**Confidence:** Medium-High (80%). Main risks are timezone/DST edge cases in time parsing and keeping interactive mode strictly opt-in so it never breaks pipelines.
+
+---
+
 ## 3. Prioritization & Sequencing
 
 ### 3.1 Scoring Results
@@ -594,6 +659,7 @@ The inverse of effort is used so that less effort yields a higher score (favorin
 | M7: Secondary | 3 | 2 | 3 | 2 | **2.60** | 8 |
 | M9: Distribution | 2 | 1 | 2 | 3 | **1.95** | 9 |
 | M10: Quality | 3 | 1 | 1 | 3 | **2.15** | 10 |
+| M11: Ergonomics | 5 | 1 | 2 | 3 | **3.00** | — (added post-M8) |
 
 ### 3.2 Sequencing Rationale
 
@@ -622,6 +688,9 @@ M8 (Shell & Power) ◄───────────────────�
     ├──► M9 (Distribution)
     │
     ▼
+M11 (Daily-Driver Ergonomics)
+    │
+    ▼
 M10 (Quality & Polish)
 ```
 
@@ -639,6 +708,8 @@ M10 (Quality & Polish)
 
 6. **M9 (Distribution) and M10 (Quality) last**: Distribution only matters when the product is usable. Quality is ongoing but gets dedicated focus at the end.
 
+7. **M11 (Ergonomics) inserted before M10**: Added after the 2026-10-04 UX review. Scores high on user value (daily start/stop/fix-up loop) but blocks nothing, so it follows M9 (already sprint-planned). It precedes M10 so documentation, man pages and integration tests cover the final command surface.
+
 ### 3.3 Value Delivery Timeline
 
 | After Milestone | What Users Can Do | Status |
@@ -652,10 +723,11 @@ M10 (Quality & Polish)
 | M6 | Generate time reports and export | ✅ Done |
 | M7 | Full Clockify API access | ✅ Done |
 | M8 | Shell completions, CI/CD integration | ✅ Done |
-| M9 | Install via package managers | ⬜ Next |
+| M9 | Install via package managers, self-update | ✅ Done |
+| M11 | Track time by name with natural times, interactive pickers, clone/split entries | ⬜ Next |
 | M10 | Production-quality, well-documented CLI | ⬜ Pending |
 
-**Users can already do (M0–M8):** authenticate, list/search all core entities, track time with timers, create/update/delete projects, clients, tags, tasks, invoices, schedules, expenses, custom fields, webhooks, user groups, manage time-off and approval workflows, generate summary/detailed/weekly reports with CSV export, install shell completions with dynamic cached resource names, and run non-interactive CI pipelines with machine-readable output and meaningful exit codes — a functional daily-driver CLI covering the major Clockify API surface.
+**Users can already do (M0–M9):** authenticate, list/search all core entities, track time with timers, create/update/delete projects, clients, tags, tasks, invoices, schedules, expenses, custom fields, webhooks, user groups, manage time-off and approval workflows, generate summary/detailed/weekly reports with CSV export, install shell completions with dynamic cached resource names, run non-interactive CI pipelines with machine-readable output and meaningful exit codes, view build metadata via `clockify version`, self-update from GitHub Releases via `clockify update`, and install via go install / (pending) Homebrew tap / npm wrapper — a functional daily-driver CLI covering the major Clockify API surface with distribution scaffolding in place.
 
 ---
 
@@ -691,6 +763,8 @@ M10 (Quality & Polish)
 | **HTTP client** | M0 Week 1 | `net/http` vs. `resty` vs. `go-retry` | `net/http` + custom retry (fewer deps, meets fast startup goal) |
 | **Config format** | M0 Week 1 | YAML vs. TOML vs. JSON | YAML (spec already defines it, human-readable) |
 | **Output formatting** | M0 Week 1 | `tablewriter` vs. `lipgloss` vs. custom | `tablewriter` (lightweight, well-maintained) |
+| **Interactive prompt library** | M11 Sprint 1 | `charmbracelet/huh` vs. `AlecAivazis/survey` (archived) vs. custom | `huh` (maintained, fuzzy filter, accessible mode); evaluate binary-size and startup impact against M10 budgets (<20MB, <50ms) |
+| **Local time parsing** | M11 Sprint 1 | Hand-rolled vs. `olebedev/when` / `tj/go-naturaldate` | Hand-rolled over a small fixed grammar (`HH:MM`, am/pm, `yesterday`, `±offset`, `now`) — predictable, no ambiguous NLP, easy to document |
 | **Test strategy** | M0 Week 1 | Integration-only vs. unit+integration | Unit for core logic, integration against real API for E2E |
 | **Monorepo vs. multi-repo** | M0 Week 1 | Single repo vs. separate repos | Single repo (simpler for small team, CI/CD) |
 
@@ -735,7 +809,7 @@ M10 (Quality & Polish)
 
 - Plugin system (deferred to post-M10)
 - PDF report export (API-dependent, may not be supported)
-- Interactive `--interactive` mode for create commands (nice-to-have, not in MVP)
+- ~~Interactive `--interactive` mode for create commands~~ — moved into scope as M11 (opt-in pickers for time entries)
 - Graphical output (charts, etc.)
 
 ### 5.5 Decisions Made During M8
@@ -748,6 +822,19 @@ M10 (Quality & Polish)
 | **`--no-cache` bypasses list cache reads** | Always-fresh data for scripts/CI; completion names still written after successful API fetches so tab-complete stays warm. |
 | **Exit codes via `CLIError.ExitCode()`** | CI needs stable codes (auth=2, notfound=3, validation=10); `main.go` unwraps `CLIError` instead of always exiting 1. |
 | **JSON flags override file/stdin** | Explicit CLI flags win over `--file`/`--stdin` JSON for `time-entry create/update`; same precedence pattern as other write ops. |
+
+### 5.6 Decisions Made During M9
+
+| Decision | Rationale |
+|----------|-----------|
+| **GoReleaser over hand-rolled Actions** | Industry standard for Go CLIs: archives, checksums, universal darwin, brew formula generation; CI workflow stays thin. |
+| **ldflags on `main` package** | Makefile previously injected into `internal/cli` but `main.go` `SetBuildInfo` overwrote with `dev`. Injecting `main.*` matches goreleaser convention; `SetBuildInfo` remains the single propagation path. |
+| **Real module path everywhere** | Spec says `github.com/clockify/cli`; module is `github.com/kim/clockify-cli`. Docs and `go install` use the real path. |
+| **Passive update check never fails commands** | Hint on stderr; silent on network error; skipped for quiet/json/CI/dev builds. |
+| **`auto_update` config + env skips** | Spec requires `config set auto_update false` and `CLOCKIFY_NO_UPDATE_CHECK=1`; CI env also skips. |
+| **Dev builds refuse self-update** | `version=dev` cannot identify a release asset safely; clear error points to package manager / go install. |
+| **pip/AUR/Snap out of scope** | Listed in spec §7.2 but not in PLAN.md M9 deliverables; deferred post-M10. |
+| **main.go prints errors** | `SilenceErrors` + no print meant `update --check` failures were invisible; fixed in M9. |
 
 ---
 
@@ -766,16 +853,17 @@ M10 (Quality & Polish)
 | M6: Reports | 2–3 weeks | **~0.5 day** | ✅ **DONE** | Time reports & export |
 | M7: Secondary Resources | 4–5 weeks | **~1 day** | ✅ **DONE** | Full API coverage |
 | M8: Shell & Power | 2–3 weeks | **~1 day** | ✅ **DONE** | Shell integration, CI/CD |
-| M9: Distribution | 2–3 weeks | *1–2 days (est.)* | ⬜ Pending | Package manager installs |
+| M9: Distribution | 2–3 weeks | **~1 day** | ✅ **DONE** | Package manager installs + self-update |
+| M11: Ergonomics | — (added post-M8) | *2–3 days (est.)* | ⬜ Pending | Name-based, interactive daily workflow |
 | M10: Quality & Polish | 2–3 weeks | *1–2 days (est.)* | ⬜ Pending | Production-ready CLI |
 
 ### 6.2 Velocity Observation
 
-**Actual velocity:** ~1 day per CRUD-pattern milestone (M0, M3, M4, M5, M7, M8); 2–3 days where multi-sprint (M1, M2); ~0.5 day for M6 once official reports API docs replaced the planned live spike. Original estimates assumed calendar weeks; actuals compress to days once foundation patterns (auth, HTTP client, output, name resolution, pagination, confirmation, file/stdin) were established in M0–M2. M7 followed the same pattern: official docs.clockify.me endpoints + M4/M5 CRUD templates. M8 reused Cobra completion + M1 cache-dir patterns and shipped install/refresh/dynamic completions in ~1 day.
+**Actual velocity:** ~1 day per CRUD-pattern milestone (M0, M3, M4, M5, M7, M8, M9); 2–3 days where multi-sprint (M1, M2); ~0.5 day for M6 once official reports API docs replaced the planned live spike. Original estimates assumed calendar weeks; actuals compress to days once foundation patterns (auth, HTTP client, output, name resolution, pagination, confirmation, file/stdin) were established in M0–M2. M7 followed the same pattern: official docs.clockify.me endpoints + M4/M5 CRUD templates. M8 reused Cobra completion + M1 cache-dir patterns. M9 used GoReleaser + existing ldflags/cache patterns; live package-manager publish remains operational work (git remote + tap/npm).
 
-**Revised remaining forecast:** ~2–4 days for M9–M10 (vs original 12–16 weeks).
+**Revised remaining forecast:** ~3–6 days for M11 and M10 (vs original 12–16 weeks for M9–M10).
 
-**Cumulative actual (M0–M8):** ~11.5 development days. All packages green (`go test ./...` — 0 failures).
+**Cumulative actual (M0–M9):** ~12.5 development days. All packages green (`go test ./...` — 0 failures).
 
 ### 6.3 Milestone Tagging
 
@@ -788,9 +876,11 @@ M10 (Quality & Polish)
 | M4 | `v0.5.0-m4` | Write ops (tagged 2026-10-03) |
 | M5 | `v0.6.0-m5` | Task mgmt (tagged 2026-10-03) |
 | M6 | `v0.7.0-m6` | Reports & analytics (tagged 2026-10-04) |
-| M7 | `v0.8.0-m7` | Secondary resources |
-| M8 | `v0.9.0-m8` | Shell completion & power features (tag after M8 commit) |
-| M9+ | — | Tag on completion |
+| M7 | `v0.8.0-m7` | Secondary resources (tagged 2026-10-04 on `3168f3e`) |
+| M8 | `v0.9.0-m8` | Shell completion & power features (tagged 2026-10-04 on `969ca42`) |
+| M9 | `v0.10.0-m9` | Distribution & packaging (tag on M9 commit) |
+| M11 | `v0.11.0-m11` | Tag on completion (ships before M10) |
+| M10 | `v1.0.0` | First stable release |
 
 **First usable release (M3 complete):** Was planned weeks 10–13; actually reached after ~7 days. Users can authenticate, track time, manage projects/clients/tags/tasks, and generate reports.
 
@@ -800,4 +890,4 @@ M10 (Quality & Polish)
 
 *Post-M1 review outcomes: estimates revised downward after M0–M5 actuals; open questions on batch endpoints and API versioning resolved; report API host confirmed via spec §3.6.*
 
-*Last updated: 2026-10-04 — M8 complete (completion install/refresh, TTL list cache, dynamic name completions, CI/CD exit codes, time-entry/report stdin). M9 (Distribution & Packaging) is next.*
+*Last updated: 2026-10-04 — M9 complete (GoReleaser + GitHub Actions, version JSON, clockify update/--check/--version, auto-update 24h cache, auto_update config, npm wrapper scaffold, ldflags fix). Tags v0.8.0-m7 / v0.9.0-m8 created on prior commits. Live brew/npm/update publish blocked on git remote + first GitHub release. Next: M11 (Daily-Driver Ergonomics), then M10.*
