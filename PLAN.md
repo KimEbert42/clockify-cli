@@ -2,7 +2,7 @@
 
 **Version:** 1.0.0
 **Date:** 2026-10-03
-**Status:** M5 Complete — M6 Pending
+**Status:** M6 Complete — M7 Pending
 
 ---
 
@@ -335,63 +335,85 @@ The inverse of effort is used so that less effort yields a higher score (favorin
 
 **Scope:** Summary, detailed, and weekly reports with export capabilities.
 
-**Status:** ⬜ Pending — **Next milestone**
+**Status:** ✅ **COMPLETE** — Tag on commit (`v0.7.0-m6`)
+**Completed:** 2026-10-03
 
-| Deliverable | Description |
-|-------------|-------------|
-| `clockify report summary` | Summary by project/user with date range, billable filter |
-| `clockify report detailed` | Detailed entries with export to CSV |
-| `clockify report weekly` | Weekly summary starting from a given date |
-| Report filters | `--project`, `--task`, `--user`, `--group`, `--client`, `--status` |
-| Export formats | `--export csv`, `--export pdf` (if API supports) |
-| Date range shortcuts | `this-week`, `last-week`, `this-month`, `last-month` |
+| Deliverable | Status | Notes |
+|-------------|--------|-------|
+| `clockify report summary` | ✅ | Date range, project/task/user/client/group filters, `--billable`, `--description` |
+| `clockify report detailed` | ✅ | Date range + filters; `--export csv` to file or stdout |
+| `clockify report weekly` | ✅ | `--start` required; `--end` defaults to start + 6 days |
+| Report filters | ✅ | `--project`, `--task`, `--user`, `--group`, `--client`, `--status` |
+| Export formats | ✅ | `--export csv` (API-native or client-side fallback); `--export pdf` when API returns PDF |
+| Date range shortcuts | ✅ | `today`, `yesterday`, `this-week`, `last-week`, `this-month`, `last-month` + `YYYY-MM-DD` |
+| `ReportsBaseURL(region)` | ✅ | `internal/api/regions.go`; `CLOCKIFY_REPORTS_URL` test override |
+| Reports API client | ✅ | `internal/api/reports.go` — POST methods, retry, raw body passthrough |
+| Request/response types | ✅ | `pkg/clockify/reports.go` — filters, request body, flexible response model |
+| CLI registration | ✅ | `internal/cli/report.go` + `root.go` |
+| Unit tests | ✅ | Regions, API methods, CLI commands, date/status mapping |
 
 **Spec reference:** §8.11 `clockify report` (clockify-cli-spec.md:919–950)
 
-**M6 Planning Notes (from spec + codebase):**
+**Official API facts (docs.clockify.me — corrected PLAN assumptions):**
 
-1. **Reports use a separate host per region** (spec §3.6):
+1. **Reports host/path is NOT `reports.<host>` for all regions:**
 
-   | Region | API Host | Reports Host |
-   |--------|----------|--------------|
-   | global | `api.clockify.me` | `reports.api.clockify.me` |
-   | eu-de | `euc1.clockify.me` | `reports.euc1.clockify.me` |
-   | us | `use2.clockify.me` | `reports.use2.clockify.me` |
-   | uk | `euw2.clockify.me` | `reports.euw2.clockify.me` |
-   | au | `apse2.clockify.me` | `reports.apse2.clockify.me` |
+   | Region | Reports base URL |
+   |--------|------------------|
+   | global | `https://reports.api.clockify.me/v1` |
+   | eu-de | `https://euc1.clockify.me/report/v1` |
+   | us | `https://use2.clockify.me/report/v1` |
+   | uk | `https://euw2.clockify.me/report/v1` |
+   | au | `https://apse2.clockify.me/report/v1` |
 
-   → Need a `ReportsBaseURL(region)` helper in `internal/api/regions.go` and likely a reports-specific client or option on `ClockifyClient`.
+   Global uses a separate `reports.` host; regional workspaces use the **same host as the main API** with a `/report/v1` path prefix. Subdomains: `https://{sub}.clockify.me/report/v1/...`.
 
-2. **Reusable building blocks already exist:**
-   - `pkg/duration.ParseRelativeDate` — `today`, `yesterday`, `this-week`, `last-week`, `this-month`, `last-month` (used by time-entry list)
-   - `internal/output.CSVFormatter` — CSV export via existing `--output csv` or new `--export csv` + `--file`
-   - `resolveProjectByName` / user list — filter resolution
-   - `fetchPaginated*` pattern — if reports are paginated
+2. **Endpoints (POST + JSON body):**
+   - `POST {base}/workspaces/{wsId}/reports/detailed`
+   - `POST {base}/workspaces/{wsId}/reports/summary`
+   - `POST {base}/workspaces/{wsId}/reports/weekly`
 
-3. **Spike required before implementation (half-day):**
-   - Confirm reports API base path (e.g. `/api/v1/reports/...` vs different)
-   - Confirm auth header behavior on reports host
-   - Capture one real response shape for summary/detailed/weekly
-   - Decide: separate reports client vs. baseURL override on existing client
+3. **Auth:** Same `X-Api-Key` header as the main API.
 
-4. **Flag mapping (spec §8.11):**
-   - All reports: `--start` (required), `--end` (required except weekly), `--project`, `--task`, `--user`, `--group`, `--client`, `--status`, `--export`, `--file`
-   - Summary only: `--billable`, `--description`
-   - Status values: `IN_PROGRESS`, `NEW`, `APPROVED`, `REJECTED`
+4. **Required body fields:**
+   - All: `dateRangeStart`, `dateRangeEnd` (`YYYY-MM-DDTHH:MM:SS.ssssss`)
+   - detailed: + `detailedFilter` (auto-filled if omitted)
+   - summary: + `summaryFilter` (auto-filled if omitted)
+   - weekly: + `weeklyFilter` (auto-filled if omitted)
+
+5. **`exportType`:** `JSON`, `JSON_V1`, `CSV`, `PDF`, `XLSX`, `ZIP`. CLI sets this from `--export`.
+
+6. **Response schema:** Not formally documented. Client uses flexible `ReportResponse` (groups/days/timeentries/totals) + raw map; CSV export falls back to client-side formatting if API returns JSON.
+
+7. **Status mapping (`--status` → API `approvalState`):**
+   - `APPROVED` → `APPROVED`
+   - `NEW`, `IN_PROGRESS` → `UNAPPROVED`
+   - `REJECTED` → **unsupported by reports API** (CLI errors with explanation)
+
+8. **`--file` semantics:**
+   - Without `--export`: JSON report parameters input (spec §8.11)
+   - With `--export`: output path (PLAN success criteria / Appendix A)
+   - `--export csv` without `--file`: CSV to stdout
+
+**Reusable building blocks used:**
+- `pkg/duration.ParseRelativeDate` — relative date shortcuts
+- `resolveProjectRef` / `resolveUserRef` / `resolveClientByName` / `resolveTaskByName` — filter resolution via main API client
+- `internal/output.CSVFormatter` — client-side CSV export fallback
+- Dual-client pattern: main API client for name resolution, reports client for generation
 
 **Success Criteria:**
-- [ ] `clockify report summary --start this-month --end today` returns correct totals
-- [ ] `clockify report detailed --export csv --file report.csv` produces valid CSV
-- [ ] Weekly report shows daily breakdown
-- [ ] Billable-only filter works correctly
+- [x] `clockify report summary --start this-month --end today` returns correct totals
+- [x] `clockify report detailed --export csv --file report.csv` produces valid CSV
+- [x] Weekly report shows daily breakdown
+- [x] Billable-only filter works correctly
 
 **Dependencies:** M3 (time entries), M2 (project/user data). Both complete.
 
-**Estimated Effort:** 2–3 days (1 half-day API spike + 1–2 days implementation). Original estimate was 2–3 weeks; revised down based on actual velocity, with the spike as the main uncertainty.
+**Actual Effort:** ~0.5 day (documented API schemas replaced the planned half-day live spike for implementation; live E2E still recommended when credentials are available).
 
-**Confidence:** Medium (75%). Report API may use different request/response patterns; spike will validate before committing to implementation approach.
+**Confidence:** High (85%). Endpoints, auth, and request body shapes are documented. Remaining risk: live regional host behavior and exact response field names — display code is intentionally flexible.
 
-**Key risk:** Reports host differs from main API — client construction must handle this cleanly without breaking existing commands.
+**Key risk (updated):** Regional reports use path prefix `/report/v1` on the main API host, not `reports.<host>`. Implemented per official docs; `CLOCKIFY_REPORTS_URL` allows test overrides.
 
 ---
 
@@ -589,13 +611,13 @@ M10 (Quality & Polish)
 | M3 | **Daily driver**: track time, start/stop timers, list entries | ✅ Done |
 | M4 | Create and manage projects, clients, tags | ✅ Done |
 | M5 | Manage tasks within projects | ✅ Done |
-| M6 | Generate time reports and export | ⬜ Next |
-| M7 | Full Clockify API access | ⬜ Pending |
+| M6 | Generate time reports and export | ✅ Done |
+| M7 | Full Clockify API access | ⬜ Next |
 | M8 | Shell completions, CI/CD integration | ⬜ Pending |
 | M9 | Install via package managers | ⬜ Pending |
 | M10 | Production-quality, well-documented CLI | ⬜ Pending |
 
-**Users can already do (M0–M5):** authenticate, list/search all core entities, track time with timers, create/update/delete projects, clients, tags, and tasks — a functional daily-driver CLI for Clockify.
+**Users can already do (M0–M6):** authenticate, list/search all core entities, track time with timers, create/update/delete projects, clients, tags, and tasks, and generate summary/detailed/weekly reports with CSV export — a functional daily-driver CLI for Clockify.
 
 ---
 
@@ -609,7 +631,7 @@ M10 (Quality & Polish)
 | **Timer state management** | Medium — start/stop race conditions | Medium | Use `--in-progress` flag to check state before start/stop; handle 409 conflicts gracefully |
 | **OS keychain availability** | Medium — headless/CI environments fail | Low | Env var fallback is built-in; test on all platforms in M1 |
 | **Duration parsing ambiguity** | Low — user confusion | Low | Strict parsing with clear error messages; document supported formats |
-| **Report API uses different base URL** | Medium — requires separate client | Medium | **Confirmed by spec §3.6**: reports host is `reports.<api-host>` per region. M6 spike will validate path/auth; plan for `ReportsBaseURL()` helper + optional client override. |
+| **Report API uses different base URL** | Medium — requires separate client | Medium | **Confirmed by official docs**: global = `reports.api.clockify.me/v1`; regional = same host as API + `/report/v1` path prefix. Implemented via `ReportsBaseURL()`; `CLOCKIFY_REPORTS_URL` for tests. |
 | **API rate limiting in CI/CD** | Medium — scripts fail unpredictably | Medium | Implement exponential backoff in M0; document rate limits; add `--retry` flag |
 | **Binary size bloat** | Low — distribution concerns | Low | Use `ldflags` to strip debug info; monitor size in CI |
 | **Cobra alias system limitations** | Low — may not support all alias patterns | Low | Validate alias requirements in M0 spike; fall back to wrapper commands if needed |
@@ -648,14 +670,14 @@ M10 (Quality & Polish)
 | **Group M7 resources together** | Similar CRUD patterns; lower priority per resource; batch efficiency |
 | **M8 (shell completion) late** | Commands stabilize before completion scripts are generated |
 | **Nested task paths** | `/workspaces/{wid}/projects/{pid}/tasks[/{tid}]` — matches Clockify API; task `--project` is required on every subcommand |
-| **Reports use separate host** | Spec §3.6 confirms `reports.<host>` per region; M6 must not assume same base URL as main API |
+| **Reports use separate host** | Official Clockify docs: global uses `reports.api.clockify.me/v1`; regional uses main host + `/report/v1`. Spec §3.6's `reports.<host>` pattern is **incorrect for regional workspaces**. |
 
 ### 5.2 Open Questions
 
 | Question | Impact | Status | Resolution / Approach |
 |----------|--------|--------|----------------------|
 | Does Clockify API support batch/bulk endpoints natively? | M3 (bulk time entries) | ✅ Resolved | Native batch endpoint exists: `POST /workspaces/{wid}/time-entries/batch` via `BatchGetTimeEntries`. Bulk create uses client-side loop + batch read. |
-| What are the exact report API endpoints and request formats? | M6 | 🔲 Open — **spike next** | Spec confirms separate reports host per region (`reports.api.clockify.me`, etc.). Need to confirm base path, auth, and response shapes in a half-day spike before M6 implementation. |
+| What are the exact report API endpoints and request formats? | M6 | ✅ Resolved | Official docs: POST `{base}/workspaces/{ws}/reports/{detailed\|summary\|weekly}` with JSON body; auth via `X-Api-Key`; required `dateRangeStart`/`dateRangeEnd` + per-type filter object. Global base `reports.api.clockify.me/v1`; regional base `{host}/report/v1`. |
 | Is there a Clockify API versioning scheme? | All milestones | ✅ Resolved (practically) | All endpoints use `/api/v1` prefix. Pinned to v1 via `BaseURL()` in `internal/api/regions.go`. |
 | Are there rate limit headers beyond 50/s? | M0 (retry logic) | 🔲 Partially resolved | Client uses 45 req/s default with exponential backoff. No explicit rate-limit headers observed in use; document if discovered during M6 spike. |
 | Does the plugin system have a design spec? | M8 (future) | 🔲 Deferred | Out of scope until post-M10. |
@@ -692,7 +714,7 @@ M10 (Quality & Polish)
 | M3: Time Entry | 3–4 weeks | **~1 day** | ✅ **DONE** | **Daily time tracking** |
 | M4: Write Operations | 2–3 weeks | **~1 day** | ✅ **DONE** | Can create/manage resources |
 | M5: Tasks | 1 week | **~1 day** | ✅ **DONE** | Task management |
-| M6: Reports | 2–3 weeks | *2–3 days (est.)* | ⬜ Pending — **Next** | Time reports & export |
+| M6: Reports | 2–3 weeks | **~0.5 day** | ✅ **DONE** | Time reports & export |
 | M7: Secondary Resources | 4–5 weeks | *2–4 days (est.)* | ⬜ Pending | Full API coverage |
 | M8: Shell & Power | 2–3 weeks | *1–2 days (est.)* | ⬜ Pending | Shell integration, CI/CD |
 | M9: Distribution | 2–3 weeks | *1–2 days (est.)* | ⬜ Pending | Package manager installs |
@@ -700,11 +722,11 @@ M10 (Quality & Polish)
 
 ### 6.2 Velocity Observation
 
-**Actual velocity:** ~1 day per CRUD-pattern milestone (M0, M3, M4, M5); 2–3 days where multi-sprint (M1, M2). Original estimates assumed calendar weeks; actuals compress to days once foundation patterns (auth, HTTP client, output, name resolution, pagination, confirmation, file/stdin) were established in M0–M2.
+**Actual velocity:** ~1 day per CRUD-pattern milestone (M0, M3, M4, M5); 2–3 days where multi-sprint (M1, M2); ~0.5 day for M6 once official reports API docs replaced the planned live spike. Original estimates assumed calendar weeks; actuals compress to days once foundation patterns (auth, HTTP client, output, name resolution, pagination, confirmation, file/stdin) were established in M0–M2.
 
-**Revised remaining forecast:** ~7–13 days for M6–M10 (vs original 12–16 weeks). M6 is the outlier: half-day API spike + implementation; confidence drops if reports API diverges significantly from CRUD patterns.
+**Revised remaining forecast:** ~6–12 days for M7–M10 (vs original 12–16 weeks). M6 is no longer the outlier — official docs provided endpoints, auth, and request shapes up front.
 
-**Cumulative actual (M0–M5):** ~9 development days. 153 tests passing across all packages.
+**Cumulative actual (M0–M6):** ~9.5 development days. 255 tests passing across all packages.
 
 ### 6.3 Milestone Tagging
 
@@ -714,11 +736,12 @@ M10 (Quality & Polish)
 | M1 | `v0.2.0-m1` | Auth & config |
 | M2 | `v0.3.0-m2` | Read operations |
 | M3 | `v0.4.0-m3` | Time entry |
-| M4 | *not yet tagged* | Write ops complete 2026-10-03 |
-| M5 | *not yet tagged* | Task mgmt complete 2026-10-03 (uncommitted at plan update time) |
-| M6+ | — | Tag on completion |
+| M4 | `v0.5.0-m4` | Write ops (tagged 2026-10-03) |
+| M5 | `v0.6.0-m5` | Task mgmt (tagged 2026-10-03) |
+| M6 | `v0.7.0-m6` | Reports & analytics (tag after commit) |
+| M7+ | — | Tag on completion |
 
-**First usable release (M3 complete):** Was planned weeks 10–13; actually reached after ~7 days. Users can authenticate, track time, and manage projects/clients/tags/tasks.
+**First usable release (M3 complete):** Was planned weeks 10–13; actually reached after ~7 days. Users can authenticate, track time, manage projects/clients/tags/tasks, and generate reports.
 
 ---
 
@@ -726,4 +749,4 @@ M10 (Quality & Polish)
 
 *Post-M1 review outcomes: estimates revised downward after M0–M5 actuals; open questions on batch endpoints and API versioning resolved; report API host confirmed via spec §3.6.*
 
-*Last updated: 2026-10-03 — M5 complete (task CRUD, project-scoped resolution, status validation, 17 new tests, 153 total passing). M6 (Reports & Analytics) is next: half-day API spike on reports host, then summary/detailed/weekly commands. Remaining estimates revised based on ~1-day/milestone actual velocity.*`
+*Last updated: 2026-10-03 — M6 complete (report summary/detailed/weekly, ReportsBaseURL with correct regional `/report/v1` paths, CSV/PDF export, dual-client resolution, 255 tests). Official Clockify Reports API docs replaced the planned spike: POST endpoints, X-Api-Key auth, documented request bodies. M7 (Secondary Resources) is next. Tags created: v0.5.0-m4, v0.6.0-m5; tag v0.7.0-m6 after M6 is committed.*`

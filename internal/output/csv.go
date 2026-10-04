@@ -69,6 +69,14 @@ func fromStruct(data any) []map[string]any {
 				tag := field.Tag.Get("yaml")
 				if tag == "" || tag == "-" {
 					tag = strings.ToLower(field.Name)
+				} else {
+					// Strip options like ",omitempty" so keys match header names
+					if i := strings.IndexByte(tag, ','); i >= 0 {
+						tag = tag[:i]
+					}
+					if tag == "" || tag == "-" {
+						tag = strings.ToLower(field.Name)
+					}
 				}
 				m[tag] = item.Field(j).Interface()
 			}

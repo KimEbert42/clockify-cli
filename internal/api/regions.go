@@ -30,3 +30,20 @@ func BaseURL(region string) string {
 	r := GetRegion(region)
 	return "https://" + r.Host + r.APIPath
 }
+
+// ReportsBaseURL returns the base URL for the Clockify Reports API.
+//
+// Global:  https://reports.api.clockify.me/v1
+// Regional: https://{host}/report/v1  (same host as the main API, /report path prefix)
+//
+// CLOCKIFY_REPORTS_URL overrides the computed URL (used by tests).
+func ReportsBaseURL(region string) string {
+	if url := os.Getenv("CLOCKIFY_REPORTS_URL"); url != "" {
+		return url
+	}
+	r := GetRegion(region)
+	if r.Name == "global" {
+		return "https://reports." + r.Host + "/v1"
+	}
+	return "https://" + r.Host + "/report/v1"
+}
