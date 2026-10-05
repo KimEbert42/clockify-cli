@@ -1,0 +1,110 @@
+.nh
+.TH "CLOCKIFY" "1" "Oct 2026" "clockify-cli" ""
+
+.SH NAME
+clockify-webhook-create - Create a webhook
+
+
+.SH SYNOPSIS
+\fBclockify webhook create [flags]\fP
+
+
+.SH DESCRIPTION
+Create a Clockify webhook.
+
+.PP
+Supported events (official API enum):
+NEW_PROJECT, PROJECT_UPDATED, PROJECT_DELETED, NEW_TASK, TASK_UPDATED, TASK_DELETED, NEW_CLIENT, CLIENT_UPDATED, CLIENT_DELETED, NEW_TIMER_STARTED, TIMER_STOPPED, NEW_TIME_ENTRY, TIME_ENTRY_UPDATED, TIME_ENTRY_DELETED, TIME_ENTRY_SPLIT, TIME_ENTRY_RESTORED, NEW_TAG, TAG_UPDATED, TAG_DELETED, USER_JOINED_WORKSPACE, USER_DELETED_FROM_WORKSPACE, USER_DEACTIVATED_ON_WORKSPACE, USER_ACTIVATED_ON_WORKSPACE, USER_EMAIL_CHANGED, USER_UPDATED, NEW_INVOICE, INVOICE_UPDATED, NEW_APPROVAL_REQUEST, APPROVAL_REQUEST_STATUS_UPDATED, TIME_OFF_REQUESTED, TIME_OFF_REQUEST_UPDATED, TIME_OFF_REQUEST_APPROVED, TIME_OFF_REQUEST_REJECTED, TIME_OFF_REQUEST_STARTED, TIME_OFF_REQUEST_WITHDRAWN, BALANCE_UPDATED, EXPENSE_CREATED, EXPENSE_UPDATED, EXPENSE_DELETED, EXPENSE_RESTORED, ASSIGNMENT_CREATED, ASSIGNMENT_UPDATED, ASSIGNMENT_DELETED, ASSIGNMENT_PUBLISHED, USER_GROUP_CREATED, USER_GROUP_UPDATED, USER_GROUP_DELETED, USERS_INVITED_TO_WORKSPACE, LIMITED_USERS_ADDED_TO_WORKSPACE, COST_RATE_UPDATED, BILLABLE_RATE_UPDATED
+
+.PP
+Aliases accepted: TIME_ENTRY_CREATED→NEW_TIME_ENTRY, PROJECT_CREATED→NEW_PROJECT, etc.
+
+
+.SH OPTIONS
+\fB--active\fP[=true]
+	webhook enabled
+
+.PP
+\fB--events\fP=""
+	comma-separated webhook events (required)
+
+.PP
+\fB--file\fP=""
+	JSON file with webhook data
+
+.PP
+\fB-h\fP, \fB--help\fP[=false]
+	help for create
+
+.PP
+\fB--name\fP=""
+	webhook name
+
+.PP
+\fB--stdin\fP[=false]
+	read webhook data from stdin
+
+.PP
+\fB--url\fP=""
+	webhook URL (required)
+
+
+.SH OPTIONS INHERITED FROM PARENT COMMANDS
+\fB--api-key\fP=""
+	Clockify API key (overrides config)
+
+.PP
+\fB--confirm\fP[=false]
+	skip confirmation prompts
+
+.PP
+\fB--no-cache\fP[=false]
+	bypass local cache and fetch fresh data
+
+.PP
+\fB--no-color\fP[=false]
+	disable colored output
+
+.PP
+\fB--no-pagination\fP[=false]
+	fetch all pages automatically
+
+.PP
+\fB--output\fP=""
+	output format: table, json, csv, yaml, template, ids (default: auto-detect)
+
+.PP
+\fB--page\fP=1
+	page number for paginated results
+
+.PP
+\fB--page-size\fP=50
+	number of items per page
+
+.PP
+\fB--profile\fP=""
+	config profile to use
+
+.PP
+\fB--quiet\fP[=false]
+	suppress non-essential output
+
+.PP
+\fB--region\fP=""
+	API region: global, eu-de, us, uk, au
+
+.PP
+\fB--template\fP=""
+	template string for --output template (Go text/template)
+
+.PP
+\fB-v\fP, \fB--verbose\fP[=0]
+	verbose output (can be repeated for debug)
+
+.PP
+\fB--workspace\fP=""
+	workspace ID or name
+
+
+.SH SEE ALSO
+\fBclockify-webhook(1)\fP

@@ -1,0 +1,84 @@
+.nh
+.TH "CLOCKIFY" "1" "Oct 2026" "clockify-cli" ""
+
+.SH NAME
+clockify-invoice - Manage invoices
+
+
+.SH SYNOPSIS
+\fBclockify invoice [flags]\fP
+
+
+.SH DESCRIPTION
+List, get, create, update, and delete Clockify invoices.
+
+.PP
+Status mapping (CLI → API):
+  DRAFT, FINALIZED → UNSENT; SENT → SENT; ACCEPTED, PAID → PAID; VOID → VOID
+  Official statuses also accepted: UNSENT, PARTIALLY_PAID, OVERDUE
+
+
+.SH OPTIONS
+\fB-h\fP, \fB--help\fP[=false]
+	help for invoice
+
+
+.SH OPTIONS INHERITED FROM PARENT COMMANDS
+\fB--api-key\fP=""
+	Clockify API key (overrides config)
+
+.PP
+\fB--confirm\fP[=false]
+	skip confirmation prompts
+
+.PP
+\fB--no-cache\fP[=false]
+	bypass local cache and fetch fresh data
+
+.PP
+\fB--no-color\fP[=false]
+	disable colored output
+
+.PP
+\fB--no-pagination\fP[=false]
+	fetch all pages automatically
+
+.PP
+\fB--output\fP=""
+	output format: table, json, csv, yaml, template, ids (default: auto-detect)
+
+.PP
+\fB--page\fP=1
+	page number for paginated results
+
+.PP
+\fB--page-size\fP=50
+	number of items per page
+
+.PP
+\fB--profile\fP=""
+	config profile to use
+
+.PP
+\fB--quiet\fP[=false]
+	suppress non-essential output
+
+.PP
+\fB--region\fP=""
+	API region: global, eu-de, us, uk, au
+
+.PP
+\fB--template\fP=""
+	template string for --output template (Go text/template)
+
+.PP
+\fB-v\fP, \fB--verbose\fP[=0]
+	verbose output (can be repeated for debug)
+
+.PP
+\fB--workspace\fP=""
+	workspace ID or name
+
+
+.SH SEE ALSO
+\fBclockify(1)\fP, \fBclockify-invoice-create(1)\fP, \fBclockify-invoice-delete(1)\fP, \fBclockify-invoice-get(1)\fP, \fBclockify-invoice-list(1)\fP, \fBclockify-invoice-update(1)\fP

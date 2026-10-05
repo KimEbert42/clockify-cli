@@ -50,6 +50,18 @@ func WithDebug(debug bool) ClientOption {
 	}
 }
 
+// MaskAPIKey returns a redacted form of an API key for logs and diagnostics.
+// Short keys become "****"; longer keys keep a 4-char prefix and suffix.
+func MaskAPIKey(key string) string {
+	if key == "" {
+		return ""
+	}
+	if len(key) <= 8 {
+		return "****"
+	}
+	return key[:4] + "****" + key[len(key)-4:]
+}
+
 func NewClient(apiKey, baseURL, workspaceID string, opts ...ClientOption) *ClockifyClient {
 	c := &ClockifyClient{
 		httpClient: &http.Client{
@@ -108,7 +120,8 @@ func (c *ClockifyClient) Do(ctx context.Context, method, path string, body any, 
 		defer resp.Body.Close()
 
 		if c.debug {
-			fmt.Printf("<<< %d %s\n", resp.StatusCode, resp.Status)
+			// Never print raw credentials; status line only.
+			fmt.Printf("<<< %d %s (api-key=%s)\n", resp.StatusCode, resp.Status, MaskAPIKey(c.apiKey))
 		}
 
 		if resp.StatusCode >= 200 && resp.StatusCode < 300 {
@@ -178,29 +191,29 @@ func (c *ClockifyClient) DoWithPagination(ctx context.Context, method, path stri
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json")
 
-	if c.verbose {
-		fmt.Printf(">>> %s %s\n", method, url)
-	}
+		if c.verbose {
+			fmt.Printf(">>> %s %s\n", method, url)
+		}
 
-	var lastErr error
-	for attempt := 0; attempt <= c.retryPolicy.MaxRetries; attempt++ {
-		c.rateLimiter.Take()
+		var lastErr error
+		for attempt := 0; attempt <= c.retryPolicy.MaxRetries; attempt++ {
+			c.rateLimiter.Take()
 
-		resp, err := c.httpClient.Do(req)
-		if err != nil {
-			lastErr = err
-			if c.retryPolicy.RetryableFn(0, err) && attempt < c.retryPolicy.MaxRetries {
-				time.Sleep(c.retryPolicy.Delay(attempt))
-				continue
+			resp, err := c.httpClient.Do(req)
+			if err != nil {
+				lastErr = err
+				if c.retryPolicy.RetryableFn(0, err) && attempt < c.retryPolicy.MaxRetries {
+					time.Sleep(c.retryPolicy.Delay(attempt))
+					continue
+				}
+				return nil, errors.Wrap(errors.E006Network, "request failed", err)
 			}
-			return nil, errors.Wrap(errors.E006Network, "request failed", err)
-		}
 
-		defer resp.Body.Close()
+			defer resp.Body.Close()
 
-		if c.debug {
-			fmt.Printf("<<< %d %s\n", resp.StatusCode, resp.Status)
-		}
+			if c.debug {
+				fmt.Printf("<<< %d %s (api-key=%s)\n", resp.StatusCode, resp.Status, MaskAPIKey(c.apiKey))
+			}
 
 		if resp.StatusCode >= 200 && resp.StatusCode < 300 {
 			if result != nil && resp.StatusCode != 204 {

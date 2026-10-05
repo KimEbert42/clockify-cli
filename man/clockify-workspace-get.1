@@ -1,0 +1,87 @@
+.nh
+.TH "CLOCKIFY" "1" "Oct 2026" "clockify-cli" ""
+
+.SH NAME
+clockify-workspace-get - Get workspace by ID, name, or current workspace
+
+
+.SH SYNOPSIS
+\fBclockify workspace get [flags]\fP
+
+
+.SH DESCRIPTION
+Get workspace by ID, name, or current workspace
+
+
+.SH OPTIONS
+\fB-h\fP, \fB--help\fP[=false]
+	help for get
+
+.PP
+\fB--id\fP=""
+	workspace ID
+
+.PP
+\fB--name\fP=""
+	workspace name (fuzzy match)
+
+
+.SH OPTIONS INHERITED FROM PARENT COMMANDS
+\fB--api-key\fP=""
+	Clockify API key (overrides config)
+
+.PP
+\fB--confirm\fP[=false]
+	skip confirmation prompts
+
+.PP
+\fB--no-cache\fP[=false]
+	bypass local cache and fetch fresh data
+
+.PP
+\fB--no-color\fP[=false]
+	disable colored output
+
+.PP
+\fB--no-pagination\fP[=false]
+	fetch all pages automatically
+
+.PP
+\fB--output\fP=""
+	output format: table, json, csv, yaml, template, ids (default: auto-detect)
+
+.PP
+\fB--page\fP=1
+	page number for paginated results
+
+.PP
+\fB--page-size\fP=50
+	number of items per page
+
+.PP
+\fB--profile\fP=""
+	config profile to use
+
+.PP
+\fB--quiet\fP[=false]
+	suppress non-essential output
+
+.PP
+\fB--region\fP=""
+	API region: global, eu-de, us, uk, au
+
+.PP
+\fB--template\fP=""
+	template string for --output template (Go text/template)
+
+.PP
+\fB-v\fP, \fB--verbose\fP[=0]
+	verbose output (can be repeated for debug)
+
+.PP
+\fB--workspace\fP=""
+	workspace ID or name
+
+
+.SH SEE ALSO
+\fBclockify-workspace(1)\fP

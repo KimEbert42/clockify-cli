@@ -40,6 +40,16 @@ func GetBuildInfo() BuildInfo {
 
 var rootCmd = newRootCmd()
 
+// NewRootCommand builds a fresh root command tree (used by docs/man tooling and tests).
+func NewRootCommand() *cobra.Command {
+	return newRootCmd()
+}
+
+// RootCommand returns the shared root command instance.
+func RootCommand() *cobra.Command {
+	return rootCmd
+}
+
 func newRootCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "clockify",

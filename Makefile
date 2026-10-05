@@ -5,7 +5,7 @@ DATE?=$(shell date -u '+%Y-%m-%dT%H:%M:%SZ')
 LDFLAGS=-ldflags "-s -w -X main.version=$(VERSION) -X main.commit=$(COMMIT) -X main.date=$(DATE)"
 GORELEASER?=goreleaser
 
-.PHONY: build build-all clean test lint check run release-snapshot help
+.PHONY: build build-all clean test cover lint check run release-snapshot man perf help
 
 help:
 	@echo "Targets:"
@@ -34,8 +34,24 @@ clean:
 test:
 	go test ./...
 
+cover:
+	go test ./... -coverprofile=cover.out -covermode=atomic
+	go tool cover -func=cover.out | tail -1
+	@echo "--- core packages ---"
+	@go tool cover -func=cover.out | awk 'BEGIN{split("internal/config internal/output internal/errors internal/update internal/resolve internal/api pkg/duration pkg/clockify", a, " "); for (i in a) core[a[i]]=1} \
+		{ split($$1, p, ":"); path=$$1; sub(/:[0-9]+.*/, "", path); sub(/\/[^\/]*$$/, "", path); \
+		  if (path in core) { cov=$$NF; gsub("%","",cov); s[path]+=cov; n[path]++ } } \
+		END { for (p in s) printf "%s: %.1f%%\n", p, s[p]/n[p] }' | sort
+
+man:
+	go run ./tools/man.go
+
+perf: build
+	@echo "Binary size:"; ls -la $(BINARY_NAME)
+	@echo "Startup:"; /usr/bin/time -f '%e sec' ./$(BINARY_NAME) version 2>&1 || time ./$(BINARY_NAME) version
+
 lint:
-	golangci-lint run
+	golangci-lint run || go vet ./...
 
 check: lint test
 

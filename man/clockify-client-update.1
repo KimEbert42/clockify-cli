@@ -1,0 +1,115 @@
+.nh
+.TH "CLOCKIFY" "1" "Oct 2026" "clockify-cli" ""
+
+.SH NAME
+clockify-client-update - Update a client
+
+
+.SH SYNOPSIS
+\fBclockify client update [flags]\fP
+
+
+.SH DESCRIPTION
+Update a client
+
+
+.SH OPTIONS
+\fB--address\fP=""
+	client address
+
+.PP
+\fB--archive\fP[=false]
+	archive the client
+
+.PP
+\fB--email\fP=""
+	client email
+
+.PP
+\fB--file\fP=""
+	JSON file with client data
+
+.PP
+\fB-h\fP, \fB--help\fP[=false]
+	help for update
+
+.PP
+\fB--id\fP=""
+	client ID
+
+.PP
+\fB--name\fP=""
+	client name (fuzzy match)
+
+.PP
+\fB--new-name\fP=""
+	new client name
+
+.PP
+\fB--note\fP=""
+	client note
+
+.PP
+\fB--stdin\fP[=false]
+	read client data from stdin
+
+
+.SH OPTIONS INHERITED FROM PARENT COMMANDS
+\fB--api-key\fP=""
+	Clockify API key (overrides config)
+
+.PP
+\fB--confirm\fP[=false]
+	skip confirmation prompts
+
+.PP
+\fB--no-cache\fP[=false]
+	bypass local cache and fetch fresh data
+
+.PP
+\fB--no-color\fP[=false]
+	disable colored output
+
+.PP
+\fB--no-pagination\fP[=false]
+	fetch all pages automatically
+
+.PP
+\fB--output\fP=""
+	output format: table, json, csv, yaml, template, ids (default: auto-detect)
+
+.PP
+\fB--page\fP=1
+	page number for paginated results
+
+.PP
+\fB--page-size\fP=50
+	number of items per page
+
+.PP
+\fB--profile\fP=""
+	config profile to use
+
+.PP
+\fB--quiet\fP[=false]
+	suppress non-essential output
+
+.PP
+\fB--region\fP=""
+	API region: global, eu-de, us, uk, au
+
+.PP
+\fB--template\fP=""
+	template string for --output template (Go text/template)
+
+.PP
+\fB-v\fP, \fB--verbose\fP[=0]
+	verbose output (can be repeated for debug)
+
+.PP
+\fB--workspace\fP=""
+	workspace ID or name
+
+
+.SH SEE ALSO
+\fBclockify-client(1)\fP

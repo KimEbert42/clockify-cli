@@ -18,11 +18,49 @@ jobs:
       - name: Vet
         run: go vet ./...
 
+      - name: Lint (golangci-lint)
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: latest
+        continue-on-error: true
+
       - name: Test
         run: go test ./...
+
+      - name: Coverage
+        run: |
+          go test ./... -coverprofile=cover.out -covermode=atomic
+          go tool cover -func=cover.out | tail -1
 
       - name: Build
         run: go build -o clockify ./cmd/clockify
 
       - name: Smoke version
         run: ./clockify version
+
+      - name: Size budget (<20MB)
+        run: |
+          size=$(stat -c%s clockify)
+          echo "binary size: $size"
+          test "$size" -lt 20000000
+
+      - name: Upload coverage
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: cover.out
+
+  integration:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && vars.CLOCKIFY_API_KEY != ''
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Integration tests
+        env:
+          CLOCKIFY_API_KEY: ${{ secrets.CLOCKIFY_API_KEY }}
+          CLOCKIFY_WORKSPACE_ID: ${{ secrets.CLOCKIFY_WORKSPACE_ID }}
+          CLOCKIFY_REGION: ${{ vars.CLOCKIFY_REGION }}
+        run: go test -tags integration ./integration/... -v

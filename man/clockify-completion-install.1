@@ -1,0 +1,87 @@
+.nh
+.TH "CLOCKIFY" "1" "Oct 2026" "clockify-cli" ""
+
+.SH NAME
+clockify-completion-install - Install completion script to a standard shell path
+
+
+.SH SYNOPSIS
+\fBclockify completion install [flags]\fP
+
+
+.SH DESCRIPTION
+Install completion script to a standard shell path
+
+
+.SH OPTIONS
+\fB--force\fP[=false]
+	overwrite an existing completion file
+
+.PP
+\fB-h\fP, \fB--help\fP[=false]
+	help for install
+
+.PP
+\fB--shell\fP=""
+	shell to install for: bash, zsh, fish, powershell (required)
+
+
+.SH OPTIONS INHERITED FROM PARENT COMMANDS
+\fB--api-key\fP=""
+	Clockify API key (overrides config)
+
+.PP
+\fB--confirm\fP[=false]
+	skip confirmation prompts
+
+.PP
+\fB--no-cache\fP[=false]
+	bypass local cache and fetch fresh data
+
+.PP
+\fB--no-color\fP[=false]
+	disable colored output
+
+.PP
+\fB--no-pagination\fP[=false]
+	fetch all pages automatically
+
+.PP
+\fB--output\fP=""
+	output format: table, json, csv, yaml, template, ids (default: auto-detect)
+
+.PP
+\fB--page\fP=1
+	page number for paginated results
+
+.PP
+\fB--page-size\fP=50
+	number of items per page
+
+.PP
+\fB--profile\fP=""
+	config profile to use
+
+.PP
+\fB--quiet\fP[=false]
+	suppress non-essential output
+
+.PP
+\fB--region\fP=""
+	API region: global, eu-de, us, uk, au
+
+.PP
+\fB--template\fP=""
+	template string for --output template (Go text/template)
+
+.PP
+\fB-v\fP, \fB--verbose\fP[=0]
+	verbose output (can be repeated for debug)
+
+.PP
+\fB--workspace\fP=""
+	workspace ID or name
+
+
+.SH SEE ALSO
+\fBclockify-completion(1)\fP

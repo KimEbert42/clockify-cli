@@ -1,0 +1,131 @@
+.nh
+.TH "CLOCKIFY" "1" "Oct 2026" "clockify-cli" ""
+
+.SH NAME
+clockify-report-summary - Summary report by project/user
+
+
+.SH SYNOPSIS
+\fBclockify report summary [flags]\fP
+
+
+.SH DESCRIPTION
+Summary report by project/user
+
+
+.SH OPTIONS
+\fB--billable\fP[=false]
+	show only billable time
+
+.PP
+\fB--client\fP=""
+	filter by client (ID or name)
+
+.PP
+\fB--description\fP=""
+	filter by description
+
+.PP
+\fB--end\fP=""
+	end date (YYYY-MM-DD or relative)
+
+.PP
+\fB--export\fP=""
+	export format: csv or pdf
+
+.PP
+\fB--file\fP=""
+	output path for --export, or JSON file with report parameters
+
+.PP
+\fB--group\fP=""
+	filter by user group ID
+
+.PP
+\fB-h\fP, \fB--help\fP[=false]
+	help for summary
+
+.PP
+\fB--project\fP=""
+	filter by project (ID or name)
+
+.PP
+\fB--start\fP=""
+	start date (YYYY-MM-DD or relative)
+
+.PP
+\fB--status\fP=""
+	filter by approval state: IN_PROGRESS, NEW, APPROVED, REJECTED
+
+.PP
+\fB--stdin\fP[=false]
+	read report parameters JSON from stdin
+
+.PP
+\fB--task\fP=""
+	filter by task (ID or name; requires --project)
+
+.PP
+\fB--user\fP=""
+	filter by user (ID, email, or name)
+
+
+.SH OPTIONS INHERITED FROM PARENT COMMANDS
+\fB--api-key\fP=""
+	Clockify API key (overrides config)
+
+.PP
+\fB--confirm\fP[=false]
+	skip confirmation prompts
+
+.PP
+\fB--no-cache\fP[=false]
+	bypass local cache and fetch fresh data
+
+.PP
+\fB--no-color\fP[=false]
+	disable colored output
+
+.PP
+\fB--no-pagination\fP[=false]
+	fetch all pages automatically
+
+.PP
+\fB--output\fP=""
+	output format: table, json, csv, yaml, template, ids (default: auto-detect)
+
+.PP
+\fB--page\fP=1
+	page number for paginated results
+
+.PP
+\fB--page-size\fP=50
+	number of items per page
+
+.PP
+\fB--profile\fP=""
+	config profile to use
+
+.PP
+\fB--quiet\fP[=false]
+	suppress non-essential output
+
+.PP
+\fB--region\fP=""
+	API region: global, eu-de, us, uk, au
+
+.PP
+\fB--template\fP=""
+	template string for --output template (Go text/template)
+
+.PP
+\fB-v\fP, \fB--verbose\fP[=0]
+	verbose output (can be repeated for debug)
+
+.PP
+\fB--workspace\fP=""
+	workspace ID or name
+
+
+.SH SEE ALSO
+\fBclockify-report(1)\fP

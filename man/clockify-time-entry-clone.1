@@ -1,0 +1,120 @@
+.nh
+.TH "CLOCKIFY" "1" "Oct 2026" "clockify-cli" ""
+
+.SH NAME
+clockify-time-entry-clone - Clone a time entry (start timer or create completed entry)
+
+
+.SH SYNOPSIS
+\fBclockify time-entry clone [id|last] [flags]\fP
+
+
+.SH DESCRIPTION
+Copy project, task, tags, description, and billable from an existing entry.
+
+.PP
+Without --start/--end/--duration: starts a new timer with copied metadata.
+With --start and --end/--duration: creates a completed entry.
+Any flag overrides the copied field.
+
+
+.SH OPTIONS
+\fB--billable\fP[=false]
+	override billable flag
+
+.PP
+\fB--description\fP=""
+	override description
+
+.PP
+\fB--duration\fP=""
+	duration for the new entry
+
+.PP
+\fB--end\fP=""
+	end time for the new entry
+
+.PP
+\fB-h\fP, \fB--help\fP[=false]
+	help for clone
+
+.PP
+\fB--id\fP=""
+	source time entry ID or last
+
+.PP
+\fB--project\fP=""
+	override project (ID or name)
+
+.PP
+\fB--start\fP=""
+	start time for the new entry (enables completed-entry mode with --end/--duration)
+
+.PP
+\fB--tags\fP=""
+	override tags (comma-separated IDs or names)
+
+.PP
+\fB--task\fP=""
+	override task (ID or name)
+
+
+.SH OPTIONS INHERITED FROM PARENT COMMANDS
+\fB--api-key\fP=""
+	Clockify API key (overrides config)
+
+.PP
+\fB--confirm\fP[=false]
+	skip confirmation prompts
+
+.PP
+\fB--no-cache\fP[=false]
+	bypass local cache and fetch fresh data
+
+.PP
+\fB--no-color\fP[=false]
+	disable colored output
+
+.PP
+\fB--no-pagination\fP[=false]
+	fetch all pages automatically
+
+.PP
+\fB--output\fP=""
+	output format: table, json, csv, yaml, template, ids (default: auto-detect)
+
+.PP
+\fB--page\fP=1
+	page number for paginated results
+
+.PP
+\fB--page-size\fP=50
+	number of items per page
+
+.PP
+\fB--profile\fP=""
+	config profile to use
+
+.PP
+\fB--quiet\fP[=false]
+	suppress non-essential output
+
+.PP
+\fB--region\fP=""
+	API region: global, eu-de, us, uk, au
+
+.PP
+\fB--template\fP=""
+	template string for --output template (Go text/template)
+
+.PP
+\fB-v\fP, \fB--verbose\fP[=0]
+	verbose output (can be repeated for debug)
+
+.PP
+\fB--workspace\fP=""
+	workspace ID or name
+
+
+.SH SEE ALSO
+\fBclockify-time-entry(1)\fP
