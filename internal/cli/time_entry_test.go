@@ -185,6 +185,18 @@ func TestTimeEntryGetNoID(t *testing.T) {
 
 func TestTimeEntryCreateJSON(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/user" {
+			user := clockify.User{ID: "u1", Name: "Test User", Email: "test@example.com"}
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(user)
+			return
+		}
+		if r.URL.Path == "/workspaces/ws123/projects/p1" && r.Method == "GET" {
+			proj := clockify.Project{ID: "p1", Name: "Project One", ClientID: "c1"}
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(proj)
+			return
+		}
 		if r.Method != "POST" || r.URL.Path != "/workspaces/ws123/time-entries" {
 			t.Errorf("expected POST /workspaces/ws123/time-entries, got %s %s", r.Method, r.URL.Path)
 			http.Error(w, "not found", http.StatusNotFound)
@@ -249,6 +261,71 @@ func TestTimeEntryCreateJSON(t *testing.T) {
 
 	if entry.ID != "te-new" {
 		t.Errorf("expected ID te-new, got %s", entry.ID)
+	}
+}
+
+func TestTimeEntryCreateStartByName(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/user" {
+			user := clockify.User{ID: "u1", Name: "Test User"}
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(user)
+			return
+		}
+		if r.URL.Path == "/workspaces/ws123/projects" && r.Method == "GET" {
+			projects := []clockify.Project{
+				{ID: "p-uuid-1", Name: "Website Redesign", ClientID: "c1"},
+			}
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(projects)
+			return
+		}
+		if r.Method == "POST" && r.URL.Path == "/workspaces/ws123/time-entries" {
+			var req clockify.TimeEntry
+			_ = json.NewDecoder(r.Body).Decode(&req)
+			entry := clockify.TimeEntry{
+				ID:          "te-named",
+				Description: req.Description,
+				ProjectID:   req.ProjectID,
+				UserID:      "u1",
+			}
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusCreated)
+			json.NewEncoder(w).Encode(entry)
+			return
+		}
+		http.Error(w, "not found", http.StatusNotFound)
+	}))
+	defer server.Close()
+
+	t.Setenv("CLOCKIFY_API_KEY", "test-key")
+	t.Setenv("CLOCKIFY_REGION", "global")
+	t.Setenv("CLOCKIFY_API_URL", server.URL)
+	setupTestConfig(t, "ws123")
+
+	startTime := time.Now().Add(-1 * time.Hour).Format(time.RFC3339)
+	buf := new(bytes.Buffer)
+	cmd := newRootCmd()
+	cmd.SetOut(buf)
+	cmd.SetErr(buf)
+	cmd.SetArgs([]string{
+		"time-entry", "create",
+		"--start", startTime,
+		"--duration", "1h",
+		"--project", "Website Redesign",
+		"--output", "json",
+	})
+
+	err := cmd.Execute()
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	var entry clockify.TimeEntry
+	if err := json.Unmarshal(buf.Bytes(), &entry); err != nil {
+		t.Fatalf("failed to parse JSON: %v\nraw: %s", err, buf.String())
+	}
+	if entry.ProjectID != "p-uuid-1" {
+		t.Errorf("expected resolved project p-uuid-1, got %q", entry.ProjectID)
 	}
 }
 
@@ -338,6 +415,13 @@ func TestTimeEntryStartJSON(t *testing.T) {
 			user := clockify.User{ID: "u1", Name: "Test User"}
 			w.Header().Set("Content-Type", "application/json")
 			json.NewEncoder(w).Encode(user)
+			return
+		}
+
+		if r.URL.Path == "/workspaces/ws123/projects/p1" && r.Method == "GET" {
+			proj := clockify.Project{ID: "p1", Name: "Project One"}
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(proj)
 			return
 		}
 

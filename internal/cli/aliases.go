@@ -3,12 +3,14 @@ package cli
 import "github.com/spf13/cobra"
 
 var aliases = map[string]string{
-	"lw": "workspace list",
-	"le": "time-entry list",
-	"lp": "project list",
-	"ge": "get time-entry",
-	"ce": "create time-entry",
+	"lw":  "workspace list",
+	"le":  "time-entry list",
+	"lp":  "project list",
+	"ge":  "time-entry get",
+	"ce":  "time-entry create",
 	"cfg": "config set",
+	"in":  "time-entry start",
+	"out": "time-entry stop",
 }
 
 func registerAliases(root *cobra.Command) {

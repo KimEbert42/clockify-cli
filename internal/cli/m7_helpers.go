@@ -15,11 +15,16 @@ import (
 	"github.com/kim/clockify-cli/pkg/duration"
 )
 
-// parseDateTimeCLI accepts relative dates, YYYY-MM-DD, or RFC3339/ISO8601.
+// parseDateTimeCLI accepts relative dates, HH:MM human times, YYYY-MM-DD, or RFC3339/ISO8601.
 func parseDateTimeCLI(s string) (string, error) {
 	s = strings.TrimSpace(s)
 	if s == "" {
 		return "", fmt.Errorf("empty date/time value")
+	}
+	// Prefer human grammar (local TZ) then fall back to UTC date-only parse for
+	// backward-compatible relative/date outputs used by M7 commands.
+	if t, err := parseHumanStart(s, nil); err == nil {
+		return t.Format("2006-01-02T15:04:05.000000Z"), nil
 	}
 	if duration.IsRelativeDate(s) {
 		t, err := duration.ParseRelativeDate(s, "monday")
@@ -32,7 +37,7 @@ func parseDateTimeCLI(s string) (string, error) {
 	if len(s) == 10 {
 		t, err := time.Parse("2006-01-02", s)
 		if err != nil {
-			return "", fmt.Errorf("invalid date %q (use YYYY-MM-DD or relative date)", s)
+			return "", fmt.Errorf("invalid date %q (use YYYY-MM-DD, HH:MM, or relative date)", s)
 		}
 		return t.Format("2006-01-02T15:04:05.000000Z"), nil
 	}
@@ -46,7 +51,7 @@ func parseDateTimeCLI(s string) (string, error) {
 	if t, err := time.Parse("2006-01-02T15:04:05Z", s); err == nil {
 		return t.UTC().Format("2006-01-02T15:04:05.000000Z"), nil
 	}
-	return "", fmt.Errorf("invalid date/time %q (use YYYY-MM-DD, relative date, or ISO8601)", s)
+	return "", fmt.Errorf("invalid date/time %q (use YYYY-MM-DD, HH:MM, relative date, or ISO8601)", s)
 }
 
 func parseDateOnlyCLI(s string) (string, error) {

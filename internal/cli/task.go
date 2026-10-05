@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/kim/clockify-cli/internal/api"
+	clierrors "github.com/kim/clockify-cli/internal/errors"
 	"github.com/kim/clockify-cli/pkg/clockify"
 	"github.com/kim/clockify-cli/pkg/duration"
 	"github.com/spf13/cobra"
@@ -30,6 +31,116 @@ func newTaskCmd() *cobra.Command {
 	cmd.AddCommand(newTaskCreateCmd())
 	cmd.AddCommand(newTaskUpdateCmd())
 	cmd.AddCommand(newTaskDeleteCmd())
+	cmd.AddCommand(newTaskDoneCmd())
+	cmd.AddCommand(newTaskQuickAddCmd())
+	return cmd
+}
+
+func newTaskDoneCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "done <task> --project P",
+		Short: "Mark a task as DONE",
+		Args:  cobra.MinimumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			profile, _ := cmd.Flags().GetString("profile")
+			outputFormat, _ := cmd.Flags().GetString("output")
+			projectRef, _ := cmd.Flags().GetString("project")
+			name := args[0]
+
+			if projectRef == "" {
+				return fmt.Errorf("must specify --project")
+			}
+
+			apiKey, region, cfg, err := loadAuthWithConfig(profile)
+			if err != nil {
+				return err
+			}
+			if cfg.WorkspaceID == "" {
+				return fmt.Errorf("no workspace configured; run 'clockify configure' or set --workspace")
+			}
+			client := api.NewClient(apiKey, api.BaseURL(region), cfg.WorkspaceID)
+			ctx := context.Background()
+
+			proj, err := resolveProjectRef(ctx, client, projectRef)
+			if err != nil {
+				return err
+			}
+			task, err := resolveTaskRef(ctx, client, proj.ID, name)
+			if err != nil {
+				return err
+			}
+
+			// Fetch existing for merge
+			existing, err := client.GetTask(ctx, proj.ID, task)
+			if err != nil {
+				return err
+			}
+			req := clockify.UpdateTaskRequest{
+				Name:        existing.Name,
+				Estimate:    existing.Estimate,
+				Status:      "DONE",
+				AssigneeIDs: existing.AssigneeIDs,
+				IsBillable:  &existing.IsBillable,
+			}
+			updated, err := client.UpdateTask(ctx, proj.ID, task, req)
+			if err != nil {
+				return err
+			}
+			return formatOutput(cmd, updated, outputFormat, []string{"ID", "NAME", "STATUS", "PROJECT"})
+		},
+	}
+	cmd.Flags().String("project", "", "project ID or name (required)")
+	_ = cmd.RegisterFlagCompletionFunc("project", completeProjectRefC)
+	return cmd
+}
+
+func newTaskQuickAddCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "quick-add <name> --project P",
+		Short: "Create a task with defaults (prints ID only under --quiet)",
+		Args:  cobra.MinimumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			profile, _ := cmd.Flags().GetString("profile")
+			outputFormat, _ := cmd.Flags().GetString("output")
+			quiet, _ := cmd.Flags().GetBool("quiet")
+			projectRef, _ := cmd.Flags().GetString("project")
+			name := args[0]
+
+			if projectRef == "" {
+				return fmt.Errorf("must specify --project")
+			}
+
+			apiKey, region, cfg, err := loadAuthWithConfig(profile)
+			if err != nil {
+				return err
+			}
+			if cfg.WorkspaceID == "" {
+				return fmt.Errorf("no workspace configured; run 'clockify configure' or set --workspace")
+			}
+			client := api.NewClient(apiKey, api.BaseURL(region), cfg.WorkspaceID)
+			ctx := context.Background()
+
+			proj, err := resolveProjectRef(ctx, client, projectRef)
+			if err != nil {
+				return err
+			}
+
+			task, err := client.CreateTask(ctx, proj.ID, clockify.CreateTaskRequest{
+				Name:       name,
+				IsBillable: false,
+			})
+			if err != nil {
+				return err
+			}
+			if quiet {
+				cmd.Println(task.ID)
+				return nil
+			}
+			return formatOutput(cmd, task, outputFormat, []string{"ID", "NAME", "STATUS", "PROJECT"})
+		},
+	}
+	cmd.Flags().String("project", "", "project ID or name (required)")
+	_ = cmd.RegisterFlagCompletionFunc("project", completeProjectRefC)
 	return cmd
 }
 
@@ -506,7 +617,10 @@ func resolveProjectRef(ctx context.Context, client *api.ClockifyClient, ref stri
 	// Fall back to name resolution
 	proj, err = resolveProjectByName(ctx, client, ref)
 	if err != nil {
-		return nil, fmt.Errorf("no project found matching %q", ref)
+		if cliErr, ok := err.(*clierrors.CLIError); ok {
+			return nil, cliErr
+		}
+		return nil, notFoundRefError("project", ref)
 	}
 	return proj, nil
 }
@@ -534,10 +648,14 @@ func resolveTaskByName(ctx context.Context, client *api.ClockifyClient, projectI
 		return &fuzzyMatches[0], nil
 	}
 	if len(fuzzyMatches) > 1 {
-		return nil, fmt.Errorf("multiple tasks match %q; use --id to disambiguate", name)
+		cands := make([]nameCandidate, 0, len(fuzzyMatches))
+		for _, t := range fuzzyMatches {
+			cands = append(cands, nameCandidate{Name: t.Name, ID: t.ID})
+		}
+		return nil, ambiguousRefError("tasks", name, cands)
 	}
 
-	return nil, fmt.Errorf("no task found matching %q", name)
+	return nil, notFoundRefError("task", name)
 }
 
 func resolveUserRef(ctx context.Context, client *api.ClockifyClient, ref string) (string, error) {
@@ -575,7 +693,11 @@ func resolveUserRef(ctx context.Context, client *api.ClockifyClient, ref string)
 		return matches[0].ID, nil
 	}
 	if len(matches) > 1 {
-		return "", fmt.Errorf("multiple users match %q; use user ID to disambiguate", ref)
+		cands := make([]nameCandidate, 0, len(matches))
+		for _, u := range matches {
+			cands = append(cands, nameCandidate{Name: u.Name, ID: u.ID})
+		}
+		return "", ambiguousRefError("users", ref, cands)
 	}
 
 	// Not found by name/email — treat as raw user ID

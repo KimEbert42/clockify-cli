@@ -369,8 +369,12 @@ func resolveTagByName(ctx context.Context, client *api.ClockifyClient, name stri
 		return &fuzzyMatches[0], nil
 	}
 	if len(fuzzyMatches) > 1 {
-		return nil, fmt.Errorf("multiple tags match %q; use --id to disambiguate", name)
+		cands := make([]nameCandidate, 0, len(fuzzyMatches))
+		for _, t := range fuzzyMatches {
+			cands = append(cands, nameCandidate{Name: t.Name, ID: t.ID})
+		}
+		return nil, ambiguousRefError("tags", name, cands)
 	}
 
-	return nil, fmt.Errorf("no tag found matching %q", name)
+	return nil, notFoundRefError("tag", name)
 }

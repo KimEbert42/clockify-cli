@@ -527,10 +527,14 @@ func resolveProjectByName(ctx context.Context, client *api.ClockifyClient, name 
 		return &fuzzyMatches[0], nil
 	}
 	if len(fuzzyMatches) > 1 {
-		return nil, fmt.Errorf("multiple projects match %q; use --id to disambiguate", name)
+		cands := make([]nameCandidate, 0, len(fuzzyMatches))
+		for _, p := range fuzzyMatches {
+			cands = append(cands, nameCandidate{Name: p.Name, ID: p.ID})
+		}
+		return nil, ambiguousRefError("projects", name, cands)
 	}
 
-	return nil, fmt.Errorf("no project found matching %q", name)
+	return nil, notFoundRefError("project", name)
 }
 
 func projectHasConflict(projects []clockify.Project, name string) bool {

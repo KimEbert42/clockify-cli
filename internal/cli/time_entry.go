@@ -20,7 +20,12 @@ func newTimeEntryCmd() *cobra.Command {
 		Use:     "time-entry",
 		Aliases: []string{"te"},
 		Short:   "Manage time entries",
-		Long:    `List, get, create, update, and delete Clockify time entries.`,
+		Long:    `List, get, create, update, and delete Clockify time entries.
+
+Selectors for get/update/delete/stop/clone/split:
+  <id>     time entry UUID
+  current  the running timer
+  last     most recent completed entry`,
 	}
 	cmd.AddCommand(newTimeEntryListCmd())
 	cmd.AddCommand(newTimeEntryGetCmd())
@@ -30,22 +35,25 @@ func newTimeEntryCmd() *cobra.Command {
 	cmd.AddCommand(newTimeEntryStartCmd())
 	cmd.AddCommand(newTimeEntryStopCmd())
 	cmd.AddCommand(newTimeEntryBulkCmd())
+	cmd.AddCommand(newTimeEntryCloneCmd())
+	cmd.AddCommand(newTimeEntrySplitCmd())
 	return cmd
 }
 
 func newTimeEntryListCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "list",
-		Short: "List time entries",
+		Use:     "list",
+		Aliases: []string{"ls"},
+		Short:   "List time entries",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			profile, _ := cmd.Flags().GetString("profile")
 			outputFormat, _ := cmd.Flags().GetString("output")
 			quiet, _ := cmd.Flags().GetBool("quiet")
 			startFilter, _ := cmd.Flags().GetString("start")
 			endFilter, _ := cmd.Flags().GetString("end")
-			projectFilter, _ := cmd.Flags().GetString("project")
-			taskFilter, _ := cmd.Flags().GetString("task")
-			tagsFilter, _ := cmd.Flags().GetString("tags")
+			projectRef, _ := cmd.Flags().GetString("project")
+			taskRef, _ := cmd.Flags().GetString("task")
+			tagsRef, _ := cmd.Flags().GetString("tags")
 			descriptionFilter, _ := cmd.Flags().GetString("description")
 			inProgress, _ := cmd.Flags().GetBool("in-progress")
 			page, _ := cmd.Flags().GetInt("page")
@@ -62,38 +70,60 @@ func newTimeEntryListCmd() *cobra.Command {
 			}
 
 			client := api.NewClient(apiKey, api.BaseURL(region), cfg.WorkspaceID)
+			ctx := context.Background()
 
-			user, err := client.GetCurrentUser(context.Background())
+			user, err := client.GetCurrentUser(ctx)
 			if err != nil {
 				return fmt.Errorf("failed to get current user: %w", err)
 			}
 
-			// Parse relative dates
+			// Parse relative dates (local timezone)
+			weekStart := weekStartFromConfig(cfg)
 			if startFilter != "" && duration.IsRelativeDate(startFilter) {
-				t, err := duration.ParseRelativeDate(startFilter, "monday")
+				t, err := duration.ParseRelativeDateIn(startFilter, weekStart, locationFromConfig(cfg), time.Now())
 				if err != nil {
 					return fmt.Errorf("invalid start date: %w", err)
 				}
 				startFilter = t.Format(time.RFC3339)
 			}
 			if endFilter != "" && duration.IsRelativeDate(endFilter) {
-				t, err := duration.ParseRelativeDate(endFilter, "monday")
+				t, err := duration.ParseRelativeDateIn(endFilter, weekStart, locationFromConfig(cfg), time.Now())
 				if err != nil {
 					return fmt.Errorf("invalid end date: %w", err)
 				}
-				// For end dates, use end of day
 				endFilter = time.Date(t.Year(), t.Month(), t.Day(), 23, 59, 59, 0, t.Location()).Format(time.RFC3339)
 			}
 
 			// Default to today if no date filters provided
 			if startFilter == "" && endFilter == "" && !inProgress {
-				today := time.Now()
+				today := time.Now().In(locationFromConfig(cfg))
 				startFilter = time.Date(today.Year(), today.Month(), today.Day(), 0, 0, 0, 0, today.Location()).Format(time.RFC3339)
 				endFilter = time.Date(today.Year(), today.Month(), today.Day(), 23, 59, 59, 0, today.Location()).Format(time.RFC3339)
 			}
 
+			// Resolve name filters; raw IDs pass through resolveProjectRef fast path.
+			projectID := projectRef
+			taskID := taskRef
+			var tagIDs []string
+			if projectRef != "" || taskRef != "" || tagsRef != "" {
+				var err2 error
+				projectID, taskID, tagIDs, err2 = resolveTimeEntryRefs(ctx, client, projectRef, taskRef, tagsRef)
+				if err2 != nil {
+					return err2
+				}
+			}
+			tagsFilter := ""
+			if len(tagIDs) > 0 {
+				tagsFilter = strings.Join(tagIDs, ",")
+			} else if tagsRef != "" {
+				tagsFilter = tagsRef
+			}
+			if projectRef != "" && projectID == "" {
+				projectID = projectRef
+			}
+
 			if inProgress {
-				entries, err := client.GetTimeEntryInProgress(context.Background(), user.ID)
+				entries, err := client.GetTimeEntryInProgress(ctx, user.ID)
 				if err != nil {
 					return err
 				}
@@ -111,14 +141,14 @@ func newTimeEntryListCmd() *cobra.Command {
 			opts := api.ListTimeEntriesOpts{
 				Start:       startFilter,
 				End:         endFilter,
-				ProjectID:   projectFilter,
-				TaskID:      taskFilter,
+				ProjectID:   projectID,
+				TaskID:      taskID,
 				Tags:        tagsFilter,
 				Description: descriptionFilter,
 				Hydrated:    hydrated,
 			}
 
-			entries, pageInfo, err := fetchPaginatedTimeEntries(context.Background(), client, user.ID, opts, page, pageSize, noPagination)
+			entries, pageInfo, err := fetchPaginatedTimeEntries(ctx, client, user.ID, opts, page, pageSize, noPagination)
 			if err != nil {
 				return err
 			}
@@ -128,7 +158,6 @@ func newTimeEntryListCmd() *cobra.Command {
 				return nil
 			}
 
-			// Format entries for display
 			type entryDisplay struct {
 				ID          string `json:"id" yaml:"id"`
 				Description string `json:"description" yaml:"description"`
@@ -181,29 +210,36 @@ func newTimeEntryListCmd() *cobra.Command {
 			return nil
 		},
 	}
-	cmd.Flags().String("start", "", "start date (YYYY-MM-DD or relative: today, yesterday, this-week, last-week, this-month, last-month)")
-	cmd.Flags().String("end", "", "end date (YYYY-MM-DD or relative)")
-	cmd.Flags().String("project", "", "filter by project ID")
-	cmd.Flags().String("task", "", "filter by task ID")
-	cmd.Flags().String("tags", "", "filter by tag IDs (comma-separated)")
+	cmd.Flags().String("start", "", "start date (YYYY-MM-DD, HH:MM, relative: today, yesterday, this-week, last-week, this-month, last-month, or RFC3339)")
+	cmd.Flags().String("end", "", "end date (same formats as --start)")
+	cmd.Flags().String("project", "", "filter by project ID or name")
+	cmd.Flags().String("task", "", "filter by task ID or name (requires --project)")
+	cmd.Flags().String("tags", "", "filter by tag IDs or names (comma-separated)")
 	cmd.Flags().String("description", "", "search by description")
 	cmd.Flags().Bool("in-progress", false, "show only running timers")
 	cmd.Flags().Bool("hydrated", false, "include full project/task/user objects in output")
+	_ = cmd.RegisterFlagCompletionFunc("project", completeProjectRefC)
+	_ = cmd.RegisterFlagCompletionFunc("task", completeTaskRefC)
+	_ = cmd.RegisterFlagCompletionFunc("tags", completeTagRefC)
 	return cmd
 }
 
 func newTimeEntryGetCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "get",
-		Short: "Get time entry by ID",
+		Use:   "get [id|current|last]",
+		Short: "Get time entry by ID, current, or last",
+		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			profile, _ := cmd.Flags().GetString("profile")
 			outputFormat, _ := cmd.Flags().GetString("output")
 			id, _ := cmd.Flags().GetString("id")
+			if len(args) > 0 {
+				id = args[0]
+			}
 			hydrated, _ := cmd.Flags().GetBool("hydrated")
 
 			if id == "" {
-				return fmt.Errorf("must specify --id")
+				return fmt.Errorf("must specify time entry ID, current, or last")
 			}
 
 			apiKey, region, cfg, err := loadAuthWithConfig(profile)
@@ -216,11 +252,16 @@ func newTimeEntryGetCmd() *cobra.Command {
 			}
 
 			client := api.NewClient(apiKey, api.BaseURL(region), cfg.WorkspaceID)
+			ctx := context.Background()
+
+			id, err = resolveTimeEntryRef(ctx, client, id)
+			if err != nil {
+				return err
+			}
 
 			var entry *clockify.TimeEntry
 			if hydrated {
-				// Use batch endpoint with hydrated flag
-				entries, err := client.BatchGetTimeEntries(context.Background(), []string{id}, true)
+				entries, err := client.BatchGetTimeEntries(ctx, []string{id}, true)
 				if err != nil {
 					return err
 				}
@@ -229,7 +270,7 @@ func newTimeEntryGetCmd() *cobra.Command {
 				}
 				entry = &entries[0]
 			} else {
-				entry, err = client.GetTimeEntry(context.Background(), id)
+				entry, err = client.GetTimeEntry(ctx, id)
 				if err != nil {
 					return err
 				}
@@ -238,7 +279,7 @@ func newTimeEntryGetCmd() *cobra.Command {
 			return formatOutput(cmd, entry, outputFormat, []string{"ID", "DESCRIPTION", "PROJECT", "TASK", "USER", "DURATION", "START", "END", "BILLABLE", "TAGS"})
 		},
 	}
-	cmd.Flags().String("id", "", "time entry ID")
+	cmd.Flags().String("id", "", "time entry ID, current, or last")
 	cmd.Flags().Bool("hydrated", false, "include full project/task/user objects in output")
 	return cmd
 }
@@ -253,8 +294,8 @@ func newTimeEntryCreateCmd() *cobra.Command {
 			startStr, _ := cmd.Flags().GetString("start")
 			durationStr, _ := cmd.Flags().GetString("duration")
 			endStr, _ := cmd.Flags().GetString("end")
-			projectID, _ := cmd.Flags().GetString("project")
-			taskID, _ := cmd.Flags().GetString("task")
+			projectRef, _ := cmd.Flags().GetString("project")
+			taskRef, _ := cmd.Flags().GetString("task")
 			description, _ := cmd.Flags().GetString("description")
 			tagsStr, _ := cmd.Flags().GetString("tags")
 			billable, _ := cmd.Flags().GetBool("billable")
@@ -283,14 +324,17 @@ func newTimeEntryCreateCmd() *cobra.Command {
 						endStr = v
 					}
 				}
-				if projectID == "" {
+				if projectRef == "" {
 					if v, ok := jsonData["projectId"].(string); ok {
-						projectID = v
+						projectRef = v
+					}
+					if v, ok := jsonData["project"].(string); ok && projectRef == "" {
+						projectRef = v
 					}
 				}
-				if taskID == "" {
+				if taskRef == "" {
 					if v, ok := jsonData["taskId"].(string); ok {
-						taskID = v
+						taskRef = v
 					}
 				}
 				if description == "" {
@@ -316,10 +360,10 @@ func newTimeEntryCreateCmd() *cobra.Command {
 				}
 			}
 
+			// Validate required flags before network/auth (fail fast for scripts).
 			if startStr == "" {
 				return fmt.Errorf("must specify --start")
 			}
-
 			if durationStr == "" && endStr == "" {
 				return fmt.Errorf("must specify --duration or --end")
 			}
@@ -334,9 +378,29 @@ func newTimeEntryCreateCmd() *cobra.Command {
 			}
 
 			client := api.NewClient(apiKey, api.BaseURL(region), cfg.WorkspaceID)
+			ctx := context.Background()
 
-			// Parse start time (also accept relative dates / YYYY-MM-DD)
-			startTime, err := parseStartTimeFlexible(startStr)
+			user, err := client.GetCurrentUser(ctx)
+			if err != nil {
+				return fmt.Errorf("failed to get current user: %w", err)
+			}
+
+			// Interactive pickers for missing fields
+			projectRef, taskRef, tagsStr, description, err = maybePromptMissing(cmd, cfg, client, user.ID, projectRef, taskRef, tagsStr, description)
+			if err != nil {
+				return err
+			}
+
+			if projectRef == "" {
+				return missingFlagError("--project", "--project <id|name>")
+			}
+
+			projectID, taskID, tagIDs, err := resolveTimeEntryRefs(ctx, client, projectRef, taskRef, tagsStr)
+			if err != nil {
+				return err
+			}
+
+			startTime, err := parseStartTimeFlexibleWith(startStr, cfg)
 			if err != nil {
 				return err
 			}
@@ -347,14 +411,9 @@ func newTimeEntryCreateCmd() *cobra.Command {
 				TaskID:      taskID,
 				Description: description,
 				Billable:    billable,
+				TagIDs:      tagIDs,
 			}
 
-			// Parse tags
-			if tagsStr != "" {
-				req.TagIDs = strings.Split(tagsStr, ",")
-			}
-
-			// Handle duration or end time
 			if durationStr != "" {
 				secs, err := duration.Parse(durationStr)
 				if err != nil {
@@ -363,14 +422,14 @@ func newTimeEntryCreateCmd() *cobra.Command {
 				endTime := startTime.Add(time.Duration(secs) * time.Second)
 				req.End = endTime.Format(time.RFC3339)
 			} else {
-				endTime, err := parseStartTimeFlexible(endStr)
+				endTime, err := parseStartTimeFlexibleWith(endStr, cfg)
 				if err != nil {
 					return err
 				}
 				req.End = endTime.Format(time.RFC3339)
 			}
 
-			entry, err := client.CreateTimeEntry(context.Background(), req)
+			entry, err := client.CreateTimeEntry(ctx, req)
 			if err != nil {
 				return err
 			}
@@ -378,227 +437,63 @@ func newTimeEntryCreateCmd() *cobra.Command {
 			return formatOutput(cmd, entry, outputFormat, []string{"ID", "DESCRIPTION", "PROJECT", "DURATION", "START", "END", "BILLABLE"})
 		},
 	}
-	cmd.Flags().String("start", "", "start time (RFC3339, YYYY-MM-DD, or relative date)")
+	cmd.Flags().String("start", "", "start time (RFC3339, YYYY-MM-DD, HH:MM, now, ±offsets, or relative date)")
 	cmd.Flags().String("duration", "", "duration (e.g., 1h, 30m, 1h30m)")
-	cmd.Flags().String("end", "", "end time (RFC3339, YYYY-MM-DD, or relative date)")
-	cmd.Flags().String("project", "", "project ID")
-	cmd.Flags().String("task", "", "task ID")
+	cmd.Flags().String("end", "", "end time (same formats as --start)")
+	cmd.Flags().String("project", "", "project ID or name")
+	cmd.Flags().String("task", "", "task ID or name")
 	cmd.Flags().String("description", "", "description")
-	cmd.Flags().String("tags", "", "tag IDs (comma-separated)")
+	cmd.Flags().String("tags", "", "tag IDs or names (comma-separated)")
 	cmd.Flags().Bool("billable", false, "mark as billable")
 	cmd.Flags().String("file", "", "JSON file with time entry data")
 	cmd.Flags().Bool("stdin", false, "read time entry data from stdin")
+	cmd.Flags().BoolP("interactive", "i", false, "prompt interactively for missing fields (TTY only)")
 	_ = cmd.RegisterFlagCompletionFunc("project", completeProjectRefC)
+	_ = cmd.RegisterFlagCompletionFunc("task", completeTaskRefC)
 	_ = cmd.RegisterFlagCompletionFunc("tags", completeTagRefC)
 	return cmd
 }
 
-func parseStartTimeFlexible(s string) (time.Time, error) {
-	s = strings.TrimSpace(s)
-	if s == "" {
-		return time.Time{}, fmt.Errorf("empty date/time value")
-	}
-	if duration.IsRelativeDate(s) {
-		return duration.ParseRelativeDate(s, "monday")
-	}
-	if t, err := time.Parse(time.RFC3339, s); err == nil {
-		return t, nil
-	}
-	if t, err := time.Parse("2006-01-02", s); err == nil {
-		return t, nil
-	}
-	if t, err := time.Parse("2006-01-02T15:04:05", s); err == nil {
-		return t, nil
-	}
-	return time.Time{}, fmt.Errorf("invalid date/time %q: use RFC3339, YYYY-MM-DD, or relative date", s)
-}
-
 func newTimeEntryUpdateCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "update",
-		Short: "Update a time entry",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			profile, _ := cmd.Flags().GetString("profile")
-			outputFormat, _ := cmd.Flags().GetString("output")
-			id, _ := cmd.Flags().GetString("id")
-			startStr, _ := cmd.Flags().GetString("start")
-			durationStr, _ := cmd.Flags().GetString("duration")
-			endStr, _ := cmd.Flags().GetString("end")
-			projectID, _ := cmd.Flags().GetString("project")
-			taskID, _ := cmd.Flags().GetString("task")
-			description, _ := cmd.Flags().GetString("description")
-			tagsStr, _ := cmd.Flags().GetString("tags")
-			billable, _ := cmd.Flags().GetBool("billable")
-			filePath, _ := cmd.Flags().GetString("file")
-			stdin, _ := cmd.Flags().GetBool("stdin")
-
-			// JSON input first; flags override JSON when both provided.
-			jsonStart, jsonDuration, jsonEnd := "", "", ""
-			jsonProject, jsonTask, jsonDescription, jsonTags := "", "", "", ""
-			var jsonBillable *bool
-			if filePath != "" || stdin {
-				var jsonData map[string]any
-				if err := readJSONInput(filePath, stdin, &jsonData); err != nil {
-					return err
-				}
-				jsonStart, _ = jsonData["start"].(string)
-				jsonDuration, _ = jsonData["duration"].(string)
-				jsonEnd, _ = jsonData["end"].(string)
-				jsonProject, _ = jsonData["projectId"].(string)
-				jsonTask, _ = jsonData["taskId"].(string)
-				jsonDescription, _ = jsonData["description"].(string)
-				if v, ok := jsonData["tagIds"].([]any); ok {
-					parts := make([]string, 0, len(v))
-					for _, raw := range v {
-						if s, ok := raw.(string); ok && s != "" {
-							parts = append(parts, s)
-						}
-					}
-					jsonTags = strings.Join(parts, ",")
-				}
-				if v, ok := jsonData["billable"].(bool); ok {
-					jsonBillable = &v
-				}
-			}
-
-			if !cmd.Flags().Changed("start") && jsonStart != "" {
-				startStr = jsonStart
-			}
-			if !cmd.Flags().Changed("duration") && jsonDuration != "" {
-				durationStr = jsonDuration
-			}
-			if !cmd.Flags().Changed("end") && jsonEnd != "" {
-				endStr = jsonEnd
-			}
-			if !cmd.Flags().Changed("project") && jsonProject != "" {
-				projectID = jsonProject
-			}
-			if !cmd.Flags().Changed("task") && jsonTask != "" {
-				taskID = jsonTask
-			}
-			if !cmd.Flags().Changed("description") && jsonDescription != "" {
-				description = jsonDescription
-			}
-			if !cmd.Flags().Changed("tags") && jsonTags != "" {
-				tagsStr = jsonTags
-			}
-			if !cmd.Flags().Changed("billable") && jsonBillable != nil {
-				billable = *jsonBillable
-			}
-
-			if id == "" {
-				return fmt.Errorf("must specify --id")
-			}
-
-			apiKey, region, cfg, err := loadAuthWithConfig(profile)
-			if err != nil {
-				return err
-			}
-
-			if cfg.WorkspaceID == "" {
-				return fmt.Errorf("no workspace configured; run 'clockify configure' or set --workspace")
-			}
-
-			client := api.NewClient(apiKey, api.BaseURL(region), cfg.WorkspaceID)
-
-			// Get existing entry to merge updates
-			existing, err := client.GetTimeEntry(context.Background(), id)
-			if err != nil {
-				return err
-			}
-
-			req := api.UpdateTimeEntryRequest{
-				Start:       existing.TimeInterval.Start.Format(time.RFC3339),
-				ProjectID:   existing.ProjectID,
-				TaskID:      existing.TaskID,
-				Description: existing.Description,
-				Billable:    existing.Billable,
-				TagIDs:      existing.TagIDs,
-			}
-
-			// Apply updates
-			if startStr != "" {
-				startTime, err := parseStartTimeFlexible(startStr)
-				if err != nil {
-					return err
-				}
-				req.Start = startTime.Format(time.RFC3339)
-			}
-
-			if projectID != "" {
-				req.ProjectID = projectID
-			}
-
-			if taskID != "" {
-				req.TaskID = taskID
-			}
-
-			if description != "" {
-				req.Description = description
-			}
-
-			if tagsStr != "" {
-				req.TagIDs = strings.Split(tagsStr, ",")
-			}
-
-			if cmd.Flags().Changed("billable") || jsonBillable != nil {
-				req.Billable = billable
-			}
-
-			// Handle duration or end time
-			if durationStr != "" {
-				secs, err := duration.Parse(durationStr)
-				if err != nil {
-					return fmt.Errorf("invalid duration: %w", err)
-				}
-				startTime, _ := time.Parse(time.RFC3339, req.Start)
-				endTime := startTime.Add(time.Duration(secs) * time.Second)
-				req.End = endTime.Format(time.RFC3339)
-			} else if endStr != "" {
-				endTime, err := parseStartTimeFlexible(endStr)
-				if err != nil {
-					return err
-				}
-				req.End = endTime.Format(time.RFC3339)
-			} else if existing.TimeInterval.End != nil {
-				req.End = existing.TimeInterval.End.Format(time.RFC3339)
-			}
-
-			entry, err := client.UpdateTimeEntry(context.Background(), id, req)
-			if err != nil {
-				return err
-			}
-
-			return formatOutput(cmd, entry, outputFormat, []string{"ID", "DESCRIPTION", "PROJECT", "DURATION", "START", "END", "BILLABLE"})
-		},
+		Use:   "update [id|current|last] [id...]",
+		Short: "Update one or more time entries",
+		Args:  cobra.ArbitraryArgs,
+		RunE:  runTimeEntryUpdateMulti,
 	}
-	cmd.Flags().String("id", "", "time entry ID")
-	cmd.Flags().String("start", "", "start time (RFC3339, YYYY-MM-DD, or relative date)")
+	cmd.Flags().String("id", "", "time entry ID, current, or last")
+	cmd.Flags().Bool("stdin-ids", false, "read time entry IDs from stdin (one per line or JSON array)")
+	cmd.Flags().String("start", "", "start time (RFC3339, YYYY-MM-DD, HH:MM, now, ±offsets, or relative date)")
 	cmd.Flags().String("duration", "", "duration (e.g., 1h, 30m, 1h30m)")
-	cmd.Flags().String("end", "", "end time (RFC3339, YYYY-MM-DD, or relative date)")
-	cmd.Flags().String("project", "", "project ID")
-	cmd.Flags().String("task", "", "task ID")
+	cmd.Flags().String("end", "", "end time (same formats as --start)")
+	cmd.Flags().String("project", "", "project ID or name")
+	cmd.Flags().String("task", "", "task ID or name")
 	cmd.Flags().String("description", "", "description")
-	cmd.Flags().String("tags", "", "tag IDs (comma-separated)")
+	cmd.Flags().String("tags", "", "tag IDs or names (comma-separated)")
 	cmd.Flags().Bool("billable", false, "mark as billable")
 	cmd.Flags().String("file", "", "JSON file with time entry data")
 	cmd.Flags().Bool("stdin", false, "read time entry data from stdin")
 	_ = cmd.RegisterFlagCompletionFunc("project", completeProjectRefC)
+	_ = cmd.RegisterFlagCompletionFunc("task", completeTaskRefC)
 	_ = cmd.RegisterFlagCompletionFunc("tags", completeTagRefC)
 	return cmd
 }
 
 func newTimeEntryDeleteCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "delete",
+		Use:   "delete [id|current|last]",
 		Short: "Delete a time entry",
+		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			profile, _ := cmd.Flags().GetString("profile")
 			id, _ := cmd.Flags().GetString("id")
 			confirm, _ := cmd.Flags().GetBool("confirm")
+			if len(args) > 0 {
+				id = args[0]
+			}
 
 			if id == "" {
-				return fmt.Errorf("must specify --id")
+				return fmt.Errorf("must specify time entry ID, current, or last")
 			}
 
 			apiKey, region, cfg, err := loadAuthWithConfig(profile)
@@ -611,9 +506,14 @@ func newTimeEntryDeleteCmd() *cobra.Command {
 			}
 
 			client := api.NewClient(apiKey, api.BaseURL(region), cfg.WorkspaceID)
+			ctx := context.Background()
 
-			// Get entry info before deleting
-			entry, err := client.GetTimeEntry(context.Background(), id)
+			id, err = resolveTimeEntryRef(ctx, client, id)
+			if err != nil {
+				return err
+			}
+
+			entry, err := client.GetTimeEntry(ctx, id)
 			if err != nil {
 				return err
 			}
@@ -632,7 +532,7 @@ func newTimeEntryDeleteCmd() *cobra.Command {
 				}
 			}
 
-			if err := client.DeleteTimeEntry(context.Background(), id); err != nil {
+			if err := client.DeleteTimeEntry(ctx, id); err != nil {
 				return err
 			}
 
@@ -640,7 +540,7 @@ func newTimeEntryDeleteCmd() *cobra.Command {
 			return nil
 		},
 	}
-	cmd.Flags().String("id", "", "time entry ID")
+	cmd.Flags().String("id", "", "time entry ID, current, or last")
 	cmd.Flags().Bool("confirm", false, "skip confirmation prompt")
 	return cmd
 }
@@ -652,11 +552,12 @@ func newTimeEntryStartCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			profile, _ := cmd.Flags().GetString("profile")
 			outputFormat, _ := cmd.Flags().GetString("output")
-			projectID, _ := cmd.Flags().GetString("project")
-			taskID, _ := cmd.Flags().GetString("task")
+			projectRef, _ := cmd.Flags().GetString("project")
+			taskRef, _ := cmd.Flags().GetString("task")
 			description, _ := cmd.Flags().GetString("description")
 			tagsStr, _ := cmd.Flags().GetString("tags")
 			billable, _ := cmd.Flags().GetBool("billable")
+			startStr, _ := cmd.Flags().GetString("start")
 
 			apiKey, region, cfg, err := loadAuthWithConfig(profile)
 			if err != nil {
@@ -668,14 +569,23 @@ func newTimeEntryStartCmd() *cobra.Command {
 			}
 
 			client := api.NewClient(apiKey, api.BaseURL(region), cfg.WorkspaceID)
+			ctx := context.Background()
 
-			// Check for running timer
-			user, err := client.GetCurrentUser(context.Background())
+			user, err := client.GetCurrentUser(ctx)
 			if err != nil {
 				return fmt.Errorf("failed to get current user: %w", err)
 			}
 
-			running, err := client.GetTimeEntryInProgress(context.Background(), user.ID)
+			projectRef, taskRef, tagsStr, description, err = maybePromptMissing(cmd, cfg, client, user.ID, projectRef, taskRef, tagsStr, description)
+			if err != nil {
+				return err
+			}
+
+			if projectRef == "" {
+				return missingFlagError("--project", "--project <id|name>")
+			}
+
+			running, err := client.GetTimeEntryInProgress(ctx, user.ID)
 			if err != nil {
 				return err
 			}
@@ -684,19 +594,31 @@ func newTimeEntryStartCmd() *cobra.Command {
 				return fmt.Errorf("timer already running (ID: %s); stop it first with 'clockify time-entry stop'", running[0].ID)
 			}
 
+			startTime := time.Now()
+			if startStr != "" {
+				startTime, err = parseStartTimeFlexibleWith(startStr, cfg)
+				if err != nil {
+					return err
+				}
+			}
+
+			// Resolve project name/ID; pass through raw IDs when resolution is
+			// unnecessary (UUID-shaped) via resolveProjectRef fast path.
+			projectID, taskID, tagIDs, err := resolveTimeEntryRefs(ctx, client, projectRef, taskRef, tagsStr)
+			if err != nil {
+				return err
+			}
+
 			req := api.CreateTimeEntryRequest{
-				Start:       time.Now().Format(time.RFC3339),
+				Start:       startTime.Format(time.RFC3339),
 				ProjectID:   projectID,
 				TaskID:      taskID,
 				Description: description,
 				Billable:    billable,
+				TagIDs:      tagIDs,
 			}
 
-			if tagsStr != "" {
-				req.TagIDs = strings.Split(tagsStr, ",")
-			}
-
-			entry, err := client.CreateTimeEntry(context.Background(), req)
+			entry, err := client.CreateTimeEntry(ctx, req)
 			if err != nil {
 				return err
 			}
@@ -705,11 +627,16 @@ func newTimeEntryStartCmd() *cobra.Command {
 			return formatOutput(cmd, entry, outputFormat, []string{"ID", "DESCRIPTION", "PROJECT", "START"})
 		},
 	}
-	cmd.Flags().String("project", "", "project ID")
-	cmd.Flags().String("task", "", "task ID")
+	cmd.Flags().String("project", "", "project ID or name")
+	cmd.Flags().String("task", "", "task ID or name")
 	cmd.Flags().String("description", "", "description")
-	cmd.Flags().String("tags", "", "tag IDs (comma-separated)")
+	cmd.Flags().String("tags", "", "tag IDs or names (comma-separated)")
 	cmd.Flags().Bool("billable", false, "mark as billable")
+	cmd.Flags().String("start", "", "optional start time (default: now)")
+	cmd.Flags().BoolP("interactive", "i", false, "prompt interactively for missing fields (TTY only)")
+	_ = cmd.RegisterFlagCompletionFunc("project", completeProjectRefC)
+	_ = cmd.RegisterFlagCompletionFunc("task", completeTaskRefC)
+	_ = cmd.RegisterFlagCompletionFunc("tags", completeTagRefC)
 	return cmd
 }
 
@@ -731,13 +658,14 @@ func newTimeEntryStopCmd() *cobra.Command {
 			}
 
 			client := api.NewClient(apiKey, api.BaseURL(region), cfg.WorkspaceID)
+			ctx := context.Background()
 
-			user, err := client.GetCurrentUser(context.Background())
+			user, err := client.GetCurrentUser(ctx)
 			if err != nil {
 				return fmt.Errorf("failed to get current user: %w", err)
 			}
 
-			running, err := client.GetTimeEntryInProgress(context.Background(), user.ID)
+			running, err := client.GetTimeEntryInProgress(ctx, user.ID)
 			if err != nil {
 				return err
 			}
@@ -751,12 +679,11 @@ func newTimeEntryStopCmd() *cobra.Command {
 				End: time.Now().Format(time.RFC3339),
 			}
 
-			if err := client.StopTimeEntry(context.Background(), user.ID, req); err != nil {
+			if err := client.StopTimeEntry(ctx, user.ID, req); err != nil {
 				return err
 			}
 
-			// Get updated entry
-			updated, err := client.GetTimeEntry(context.Background(), entry.ID)
+			updated, err := client.GetTimeEntry(ctx, entry.ID)
 			if err != nil {
 				return err
 			}
@@ -784,14 +711,8 @@ Input format (JSON array):
   {
     "start": "2024-01-15T09:00:00Z",
     "duration": "1h",
-    "project": "project-id",
+    "project": "project-id-or-name",
     "description": "Working on feature"
-  },
-  {
-    "start": "2024-01-15T10:00:00Z",
-    "end": "2024-01-15T12:00:00Z",
-    "project": "project-id",
-    "description": "Meeting"
   }
 ]`,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -813,7 +734,6 @@ Input format (JSON array):
 				return fmt.Errorf("no workspace configured; run 'clockify configure' or set --workspace")
 			}
 
-			// Read input
 			var inputData []byte
 			if filePath != "" {
 				inputData, err = os.ReadFile(filePath)
@@ -827,7 +747,6 @@ Input format (JSON array):
 				}
 			}
 
-			// Parse JSON input
 			var inputEntries []struct {
 				Start       string   `json:"start"`
 				End         string   `json:"end,omitempty"`
@@ -848,28 +767,33 @@ Input format (JSON array):
 			}
 
 			client := api.NewClient(apiKey, api.BaseURL(region), cfg.WorkspaceID)
+			ctx := context.Background()
 
 			var created []clockify.TimeEntry
 			var errors []string
 
 			for i, input := range inputEntries {
-				// Parse start time
-				startTime, err := time.Parse(time.RFC3339, input.Start)
+				startTime, err := parseStartTimeFlexibleWith(input.Start, cfg)
 				if err != nil {
 					errors = append(errors, fmt.Sprintf("entry %d: invalid start time: %v", i+1, err))
 					continue
 				}
 
-				req := api.CreateTimeEntryRequest{
-					Start:       startTime.Format(time.RFC3339),
-					ProjectID:   input.ProjectID,
-					TaskID:      input.TaskID,
-					Description: input.Description,
-					Billable:    input.Billable,
-					TagIDs:      input.TagIDs,
+				projectID, taskID, tagIDs, err := resolveTimeEntryRefs(ctx, client, input.ProjectID, input.TaskID, strings.Join(input.TagIDs, ","))
+				if err != nil {
+					errors = append(errors, fmt.Sprintf("entry %d: %v", i+1, err))
+					continue
 				}
 
-				// Handle duration or end time
+				req := api.CreateTimeEntryRequest{
+					Start:       startTime.Format(time.RFC3339),
+					ProjectID:   projectID,
+					TaskID:      taskID,
+					Description: input.Description,
+					Billable:    input.Billable,
+					TagIDs:      tagIDs,
+				}
+
 				if input.Duration != "" {
 					secs, err := duration.Parse(input.Duration)
 					if err != nil {
@@ -879,7 +803,7 @@ Input format (JSON array):
 					endTime := startTime.Add(time.Duration(secs) * time.Second)
 					req.End = endTime.Format(time.RFC3339)
 				} else if input.End != "" {
-					endTime, err := time.Parse(time.RFC3339, input.End)
+					endTime, err := parseStartTimeFlexibleWith(input.End, cfg)
 					if err != nil {
 						errors = append(errors, fmt.Sprintf("entry %d: invalid end time: %v", i+1, err))
 						continue
@@ -887,7 +811,7 @@ Input format (JSON array):
 					req.End = endTime.Format(time.RFC3339)
 				}
 
-				entry, err := client.CreateTimeEntry(context.Background(), req)
+				entry, err := client.CreateTimeEntry(ctx, req)
 				if err != nil {
 					errors = append(errors, fmt.Sprintf("entry %d: %v", i+1, err))
 					continue
@@ -909,6 +833,48 @@ Input format (JSON array):
 	}
 	cmd.Flags().String("file", "", "JSON file with time entries")
 	cmd.Flags().Bool("stdin", false, "read time entries from stdin")
+	return cmd
+}
+
+func newTimeEntryCloneCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "clone [id|last]",
+		Short: "Clone a time entry (start timer or create completed entry)",
+		Long: `Copy project, task, tags, description, and billable from an existing entry.
+
+Without --start/--end/--duration: starts a new timer with copied metadata.
+With --start and --end/--duration: creates a completed entry.
+Any flag overrides the copied field.`,
+		Args: cobra.MaximumNArgs(1),
+		RunE: runTimeEntryClone,
+	}
+	cmd.Flags().String("id", "", "source time entry ID or last")
+	cmd.Flags().String("start", "", "start time for the new entry (enables completed-entry mode with --end/--duration)")
+	cmd.Flags().String("end", "", "end time for the new entry")
+	cmd.Flags().String("duration", "", "duration for the new entry")
+	cmd.Flags().String("project", "", "override project (ID or name)")
+	cmd.Flags().String("task", "", "override task (ID or name)")
+	cmd.Flags().String("tags", "", "override tags (comma-separated IDs or names)")
+	cmd.Flags().String("description", "", "override description")
+	cmd.Flags().Bool("billable", false, "override billable flag")
+	_ = cmd.RegisterFlagCompletionFunc("project", completeProjectRefC)
+	_ = cmd.RegisterFlagCompletionFunc("task", completeTaskRefC)
+	_ = cmd.RegisterFlagCompletionFunc("tags", completeTagRefC)
+	return cmd
+}
+
+func newTimeEntrySplitCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "split <id|current|last> --at HH:MM [--at HH:MM...]",
+		Short: "Split a time entry at one or more times",
+		Long: `Divide an entry at the given local times. The original entry ends at the
+first split point; remaining segments are created with identical metadata.
+Split points must fall strictly inside the entry.`,
+		Args: cobra.MinimumNArgs(1),
+		RunE: runTimeEntrySplit,
+	}
+	cmd.Flags().StringArray("at", nil, "split point (HH:MM or full timestamp; repeatable)")
+	cmd.Flags().Bool("confirm", false, "skip confirmation prompt")
 	return cmd
 }
 

@@ -445,8 +445,12 @@ func resolveClientByName(ctx context.Context, client *api.ClockifyClient, name s
 		return &fuzzyMatches[0], nil
 	}
 	if len(fuzzyMatches) > 1 {
-		return nil, fmt.Errorf("multiple clients match %q; use --id to disambiguate", name)
+		cands := make([]nameCandidate, 0, len(fuzzyMatches))
+		for _, c := range fuzzyMatches {
+			cands = append(cands, nameCandidate{Name: c.Name, ID: c.ID})
+		}
+		return nil, ambiguousRefError("clients", name, cands)
 	}
 
-	return nil, fmt.Errorf("no client found matching %q", name)
+	return nil, notFoundRefError("client", name)
 }

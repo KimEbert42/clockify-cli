@@ -19,6 +19,10 @@ type Config struct {
 	WeekStarts  string `yaml:"week_starts" mapstructure:"week_starts"`
 	// AutoUpdate: empty = enabled (default); "false"/"0"/"no"/"off" disables passive checks.
 	AutoUpdate string `yaml:"auto_update,omitempty" mapstructure:"auto_update"`
+	// Interactive: empty = off; "true"/"1"/"yes"/"on" enables opt-in pickers on TTY.
+	Interactive string `yaml:"interactive,omitempty" mapstructure:"interactive"`
+	// TimeZone: IANA name (e.g. "America/New_York"); empty = OS local.
+	TimeZone string `yaml:"timezone,omitempty" mapstructure:"timezone"`
 }
 
 type ProfileConfig struct {
@@ -82,6 +86,37 @@ func mergeConfig(base, override *Config) {
 	}
 	if override.AutoUpdate != "" {
 		base.AutoUpdate = override.AutoUpdate
+	}
+	if override.Interactive != "" {
+		base.Interactive = override.Interactive
+	}
+	if override.TimeZone != "" {
+		base.TimeZone = override.TimeZone
+	}
+}
+
+// InteractiveEnabled reports whether interactive pickers are enabled via config.
+func (c *Config) InteractiveEnabled() bool {
+	if c == nil {
+		return false
+	}
+	switch strings.ToLower(strings.TrimSpace(c.Interactive)) {
+	case "true", "1", "yes", "on":
+		return true
+	default:
+		return false
+	}
+}
+
+// ParseInteractive normalizes a user-provided interactive value.
+func ParseInteractive(value string) (string, error) {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "true", "1", "yes", "on":
+		return "true", nil
+	case "false", "0", "no", "off":
+		return "false", nil
+	default:
+		return "", fmt.Errorf("interactive must be true or false, got %q", value)
 	}
 }
 

@@ -30,11 +30,69 @@ func newReportCmd() *cobra.Command {
 		Long: `Generate Clockify summary, detailed, and weekly reports.
 
 Reports use the Clockify Reports API (separate host/path from the main API).
-Date shortcuts: today, yesterday, this-week, last-week, this-month, last-month.`,
+Date shortcuts: today, yesterday, this-week, last-week, this-month, last-month.
+
+Presets (summary with matching date range):
+  report today|yesterday|this-week|last-week|this-month|last-month`,
 	}
 	cmd.AddCommand(newReportSummaryCmd())
 	cmd.AddCommand(newReportDetailedCmd())
 	cmd.AddCommand(newReportWeeklyCmd())
+	cmd.AddCommand(newReportPresetCmd("today", "today", "today"))
+	cmd.AddCommand(newReportPresetCmd("yesterday", "yesterday", "yesterday"))
+	cmd.AddCommand(newReportPresetCmd("this-week", "this-week", "today"))
+	cmd.AddCommand(newReportPresetCmd("last-week", "last-week", "last-week+6d"))
+	cmd.AddCommand(newReportPresetCmd("this-month", "this-month", "today"))
+	cmd.AddCommand(newReportPresetCmd("last-month", "last-month", "last-month+1m-1d"))
+	return cmd
+}
+
+// newReportPresetCmd builds a summary-report shortcut for a date preset.
+func newReportPresetCmd(name, startRel, endRel string) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   name,
+		Short: "Summary report for " + name,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if !cmd.Flags().Changed("start") {
+				_ = cmd.Flags().Set("start", startRel)
+			}
+			if !cmd.Flags().Changed("end") {
+				end := endRel
+				// Resolve pseudo end expressions like last-week+6d
+				if strings.Contains(end, "+") {
+					base := strings.SplitN(end, "+", 2)[0]
+					delta := strings.SplitN(end, "+", 2)[1]
+					t, err := duration.ParseRelativeDate(base, "monday")
+					if err != nil {
+						return err
+					}
+					switch {
+					case strings.HasSuffix(delta, "d") && !strings.Contains(delta, "m"):
+						var n int
+						if _, err := fmt.Sscanf(delta, "%dd", &n); err == nil {
+							t = t.AddDate(0, 0, n)
+						}
+					case strings.Contains(delta, "m-1d"):
+						var n int
+						if _, err := fmt.Sscanf(delta, "%dm-1d", &n); err == nil {
+							t = t.AddDate(0, n, -1)
+						}
+					}
+					end = t.Format("2006-01-02")
+				}
+				_ = cmd.Flags().Set("end", end)
+			}
+			kind := "summary"
+			if detailed, _ := cmd.Flags().GetBool("detailed"); detailed {
+				kind = "detailed"
+			}
+			return runReport(kind, true)(cmd, args)
+		},
+	}
+	addReportCommonFlags(cmd, true)
+	cmd.Flags().Bool("billable", false, "show only billable time")
+	cmd.Flags().String("description", "", "filter by description")
+	cmd.Flags().Bool("detailed", false, "use detailed report instead of summary")
 	return cmd
 }
 
@@ -57,7 +115,7 @@ func addReportCommonFlags(cmd *cobra.Command, requireEnd bool) {
 	_ = cmd.RegisterFlagCompletionFunc("project", completeProjectRefC)
 	_ = cmd.RegisterFlagCompletionFunc("user", completeUserRefC)
 	_ = cmd.RegisterFlagCompletionFunc("client", completeClientRefC)
-	_ = cmd.RegisterFlagCompletionFunc("task", completeProjectRefC)
+	_ = cmd.RegisterFlagCompletionFunc("task", completeTaskRefC)
 }
 
 func newReportSummaryCmd() *cobra.Command {
@@ -366,21 +424,9 @@ func mergeReportFileParams(req *clockify.ReportRequest, params map[string]any) {
 	}
 }
 
-// parseReportDate accepts relative shortcuts and YYYY-MM-DD / RFC3339 dates.
+// parseReportDate accepts relative shortcuts, human times, and YYYY-MM-DD / RFC3339 dates.
 func parseReportDate(s string) (time.Time, error) {
-	if duration.IsRelativeDate(s) {
-		return duration.ParseRelativeDate(s, "monday")
-	}
-	if t, err := time.Parse("2006-01-02", s); err == nil {
-		return t, nil
-	}
-	if t, err := time.Parse(time.RFC3339, s); err == nil {
-		return t, nil
-	}
-	if t, err := time.Parse("2006-01-02T15:04:05.000000", s); err == nil {
-		return t, nil
-	}
-	return time.Time{}, fmt.Errorf("%q is not a valid date; use YYYY-MM-DD or relative values (today, yesterday, this-week, last-week, this-month, last-month)", s)
+	return parseHumanStart(s, nil)
 }
 
 // formatReportDate renders times in the Clockify reports API format

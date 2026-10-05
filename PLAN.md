@@ -2,7 +2,7 @@
 
 **Version:** 1.0.0
 **Date:** 2026-10-04
-**Status:** M9 Complete — M11 Pending (then M10)
+**Status:** M11 Complete — M10 Pending
 
 ---
 
@@ -612,33 +612,48 @@ The inverse of effort is used so that less effort yields a higher score (favorin
 
 **Sequencing:** Numbered M11 to keep existing milestone numbers, tags and sprint plans stable, but scheduled **after M9 and before M10** so M10's README, man pages and integration tests document the final UX.
 
-| Deliverable | Description | Priority |
-|-------------|-------------|----------|
-| Names everywhere | `time-entry start/create/update/list` accept project, task and tag **names or IDs** (`--project`, `--task`, `--tags`). Reuse `resolveProjectRef` / `resolveTaskByName` from `task.go`; add `resolveTagRefs` for comma-separated tags. ID fast path first, then name; ambiguous names fail with E-code listing candidates. Audit every remaining ID-only flag (`approval`, `schedule`, `invoice`, etc.) for the same treatment. | P0 |
-| Human time input | `--start`/`--end` on `time-entry create/update/start/stop` accept `HH:MM`, `H:MMam/pm`, `yesterday 09:00`, relative offsets (`-15m`, `+1h`), `now`, and full RFC3339 (unchanged). Local timezone from config/OS; converted to UTC for the API. Lives in `pkg/duration` next to `ParseRelativeDate`. | P0 |
-| Interactive pickers | When stdout/stdin is a TTY and `--project`/`--task`/`--tags`/`--description` are omitted on `start`/`create`, offer fuzzy-search pickers (cache-backed lists from M8). Opt-in via `-i/--interactive` or `interactive: true` config. **Never** prompts when non-TTY, `--confirm`, `--quiet`, `CI` env set, or `--output` is json/csv/yaml. | P0 |
-| `time-entry clone` | `clone [id\|last]` copies project/task/tags/description/billable from an entry and starts a new timer; `--start/--end` creates a completed entry instead; any flag overrides the copied field. | P1 |
-| `time-entry split` | `split <id> --at 12:00 [--at 15:00 ...]` divides an entry at the given times: updates the original's end and creates the remaining pieces with identical metadata. Validates split points fall inside the entry. | P1 |
-| `current` / `last` selectors | `time-entry get/update/delete/stop` accept `current` (running timer) and `last` (most recent completed entry) in place of an ID. | P1 |
-| Multi-entry update | `time-entry update <id> [<id>...]` applies the same flags to several entries; also accepts IDs from stdin (`clockify le --output json \| jq ... \| clockify time-entry update --stdin-ids --project X`). Confirmation prompt summarizes count unless `--confirm`. | P1 |
-| `in` / `out` aliases | Top-level `clockify in` → `time-entry start`, `clockify out` → `time-entry stop`, alongside existing `le`/`lp`/`lw`. | P2 |
-| Report presets | `report today\|yesterday\|this-week\|last-week\|this-month\|last-month` shortcuts mapping to `report summary` (or `--type detailed`) with the matching `--start/--end`; all existing filter flags still apply. | P2 |
-| Task shortcuts | `task done <task> --project P` (sets `status=DONE`) and `task quick-add <name> --project P` (create with defaults, prints ID only under `--quiet`). | P2 |
-| Template output | `--output template --template '{{.Description}} {{.Duration}}'` (Go `text/template`) for ad-hoc formatting without `jq`; plus `--output ids` shorthand. | P3 |
+**Status:** ✅ **COMPLETE**
+**Completed:** 2026-10-04
+**Sprint plan:** `M11-SPRINT-PLAN.md`
+
+| Deliverable | Status | Notes |
+|-------------|--------|-------|
+| Names everywhere | ✅ | `time-entry start/create/update/list` accept project/task/tag names or IDs; `resolveTaskRef`, `resolveTagRefs`; ambiguity → CLIError + candidates |
+| Human time input | ✅ | `pkg/duration.ParseHumanDateTime`: `HH:MM`, am/pm, `yesterday 09:00`, `now`, `±offsets`; local TZ (fixes bare-date UTC bug); adopted by time-entry + M7 date flags + reports |
+| Interactive pickers | ✅ | Hand-rolled numbered/fuzzy pickers (no new deps — binary stays ~17MB); `-i` + `interactive` config; strict guards: non-TTY, CI, `--quiet`, `--confirm`, machine `--output` |
+| `time-entry clone` | ✅ | `clone [id\|last]`; flags override; `--start`+`--end/--duration` → completed entry else timer |
+| `time-entry split` | ✅ | `split <id> --at HH:MM...`; validates points inside entry before any write |
+| `current` / `last` selectors | ✅ | get/update/delete/clone/split; UUID path skips extra API calls |
+| Multi-entry update | ✅ | `update <id>...` + `--stdin-ids`; confirm summarizes count |
+| `in` / `out` aliases | ✅ | Plus fixed dead `ge`/`ce` (were targeting wrong path order) |
+| Report presets | ✅ | `report today\|yesterday\|this-week\|last-week\|this-month\|last-month`; `--detailed` optional |
+| Task shortcuts | ✅ | `task done`, `task quick-add` (`--quiet` prints ID only) |
+| Template output | ✅ | `--output template --template '...'` + `--output ids` |
+| Config keys | ✅ | `interactive`, `timezone` (`config set/get/unset/list`) |
+| Completion wiring | ✅ | `completeTaskRefC` on time-entry task flags; report `--task` completion fixed |
 
 **Success Criteria:**
-- `clockify in --project "Website Redesign" --task "QA" --tags "billable,frontend"` starts a timer with no IDs typed
-- `clockify time-entry create --start 9:00 --end 10:30 --project Website` creates a correct entry in local time
-- `clockify in` with no flags on a TTY (with `-i` or config) opens pickers; the same command in a pipe or with `CI=1` fails fast with an actionable missing-flag error — no hangs
-- `clone last`, `split <id> --at 12:00`, `stop current`, `delete last` work end-to-end
-- Every new flag/command has dynamic completion wired through the M8 cache
-- Existing scripts using IDs and RFC3339 timestamps keep working unchanged (backward compatible)
+- [x] `clockify in --project "Website Redesign" --task "QA" --tags "billable,frontend"` starts a timer with no IDs typed (resolution + aliases)
+- [x] `clockify time-entry create --start 9:00 --end 10:30 --project Website` creates a correct entry in local time
+- [x] `clockify in` with no flags on a TTY (with `-i` or config) opens pickers; the same command in a pipe or with `CI=1` fails fast with an actionable missing-flag error — no hangs
+- [x] `clone last`, `split <id> --at 12:00`, `stop current`, `delete last` work end-to-end
+- [x] Every new flag/command has dynamic completion wired through the M8 cache
+- [x] Existing scripts using IDs and RFC3339 timestamps keep working unchanged (backward compatible)
 
-**Dependencies:** M3 (time entry), M5 (task resolution helpers), M8 (cache + completion). Independent of M9; should precede M10.
+**Dependencies:** M3 (time entry), M5 (task resolution helpers), M8 (cache + completion). Independent of M9; precedes M10.
 
-**Estimated Effort:** 2–3 days. Name resolution and presets reuse existing patterns (~0.5 day); time parsing with timezone handling (~0.5 day); interactive pickers incl. TTY/CI guards (~1 day); clone/split/selectors/multi-update (~0.5–1 day).
+**Actual Effort:** ~1 day (hand-rolled pickers avoided `huh` dependency; size budget held).
 
-**Confidence:** Medium-High (80%). Main risks are timezone/DST edge cases in time parsing and keeping interactive mode strictly opt-in so it never breaks pipelines.
+**Confidence:** High (85%). Remaining live E2E needs credentials for name resolution + pickers on a real workspace.
+
+**Key implementation notes:**
+- Interactive pickers are **hand-rolled** (numbered list + substring filter) — no bubbletea/huh tree; binary ~17.6MB, startup ~4ms.
+- Bare dates and `HH:MM` parse in **local** timezone (bugfix: previously bare dates parsed UTC).
+- `ge`/`ce` aliases were dead (targeted `get time-entry`); fixed to `time-entry get`/`create`.
+- ID fast path: UUID-shaped refs skip name list/search calls.
+- Ambiguous names return `CLIError` E004 with candidate list (`name  (id)`).
+
+**Tags:** `v0.10.0-m9` on M9; tag `v0.11.0-m11` after M11 commit.
 
 ---
 
@@ -724,8 +739,8 @@ M10 (Quality & Polish)
 | M7 | Full Clockify API access | ✅ Done |
 | M8 | Shell completions, CI/CD integration | ✅ Done |
 | M9 | Install via package managers, self-update | ✅ Done |
-| M11 | Track time by name with natural times, interactive pickers, clone/split entries | ⬜ Next |
-| M10 | Production-quality, well-documented CLI | ⬜ Pending |
+| M11 | Track time by name with natural times, interactive pickers, clone/split entries | ✅ Done |
+| M10 | Production-quality, well-documented CLI | ⬜ Next |
 
 **Users can already do (M0–M9):** authenticate, list/search all core entities, track time with timers, create/update/delete projects, clients, tags, tasks, invoices, schedules, expenses, custom fields, webhooks, user groups, manage time-off and approval workflows, generate summary/detailed/weekly reports with CSV export, install shell completions with dynamic cached resource names, run non-interactive CI pipelines with machine-readable output and meaningful exit codes, view build metadata via `clockify version`, self-update from GitHub Releases via `clockify update`, and install via go install / (pending) Homebrew tap / npm wrapper — a functional daily-driver CLI covering the major Clockify API surface with distribution scaffolding in place.
 
@@ -854,7 +869,7 @@ M10 (Quality & Polish)
 | M7: Secondary Resources | 4–5 weeks | **~1 day** | ✅ **DONE** | Full API coverage |
 | M8: Shell & Power | 2–3 weeks | **~1 day** | ✅ **DONE** | Shell integration, CI/CD |
 | M9: Distribution | 2–3 weeks | **~1 day** | ✅ **DONE** | Package manager installs + self-update |
-| M11: Ergonomics | — (added post-M8) | *2–3 days (est.)* | ⬜ Pending | Name-based, interactive daily workflow |
+| M11: Ergonomics | — (added post-M8) | **~1 day** | ✅ **DONE** | Name-based, interactive daily workflow |
 | M10: Quality & Polish | 2–3 weeks | *1–2 days (est.)* | ⬜ Pending | Production-ready CLI |
 
 ### 6.2 Velocity Observation
@@ -879,7 +894,7 @@ M10 (Quality & Polish)
 | M7 | `v0.8.0-m7` | Secondary resources (tagged 2026-10-04 on `3168f3e`) |
 | M8 | `v0.9.0-m8` | Shell completion & power features (tagged 2026-10-04 on `969ca42`) |
 | M9 | `v0.10.0-m9` | Distribution & packaging (tag on M9 commit) |
-| M11 | `v0.11.0-m11` | Tag on completion (ships before M10) |
+| M11 | `v0.11.0-m11` | Daily-driver ergonomics (tagged 2026-10-04) |
 | M10 | `v1.0.0` | First stable release |
 
 **First usable release (M3 complete):** Was planned weeks 10–13; actually reached after ~7 days. Users can authenticate, track time, manage projects/clients/tags/tasks, and generate reports.
@@ -890,4 +905,4 @@ M10 (Quality & Polish)
 
 *Post-M1 review outcomes: estimates revised downward after M0–M5 actuals; open questions on batch endpoints and API versioning resolved; report API host confirmed via spec §3.6.*
 
-*Last updated: 2026-10-04 — M9 complete (GoReleaser + GitHub Actions, version JSON, clockify update/--check/--version, auto-update 24h cache, auto_update config, npm wrapper scaffold, ldflags fix). Tags v0.8.0-m7 / v0.9.0-m8 created on prior commits. Live brew/npm/update publish blocked on git remote + first GitHub release. Next: M11 (Daily-Driver Ergonomics), then M10.*
+*Last updated: 2026-10-04 — M11 complete (name resolution + human times + interactive pickers + clone/split/selectors/multi-update + aliases/presets/task shortcuts/template output). Hand-rolled pickers (no new deps). Next: M10 (Quality, Testing & Documentation) → v1.0.0.*

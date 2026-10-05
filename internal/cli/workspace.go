@@ -167,6 +167,25 @@ func loadAuth(profile string) (apiKey, region string, err error) {
 
 func formatOutput(cmd *cobra.Command, data any, format string, headers []string) error {
 	out := cmd.OutOrStdout()
+	raw := format
+	if raw == "" {
+		if cmd.Flags().Lookup("output") != nil {
+			raw, _ = cmd.Flags().GetString("output")
+		}
+	}
+	if raw == "template" {
+		tmplStr := ""
+		if cmd.Flags().Lookup("template") != nil {
+			tmplStr, _ = cmd.Flags().GetString("template")
+		}
+		if tmplStr == "" {
+			return fmt.Errorf("--output template requires --template '{{.Field}}'")
+		}
+		return output.FormatTemplate(out, data, tmplStr)
+	}
+	if raw == "ids" {
+		return output.FormatIDs(out, data)
+	}
 	formatter := output.Detect(format, output.IsTerminal())
 	if tf, ok := formatter.(*output.TableFormatter); ok {
 		tf.Quiet = quietEnabled(cmd)

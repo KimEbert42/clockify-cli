@@ -54,7 +54,8 @@ Supports multiple output formats (table, JSON, CSV, YAML) and shell completion.`
 
 	cmd.PersistentFlags().String("profile", "", "config profile to use")
 	cmd.PersistentFlags().String("workspace", "", "workspace ID or name")
-	cmd.PersistentFlags().String("output", "", "output format: table, json, csv, yaml (default: auto-detect)")
+	cmd.PersistentFlags().String("output", "", "output format: table, json, csv, yaml, template, ids (default: auto-detect)")
+	cmd.PersistentFlags().String("template", "", "template string for --output template (Go text/template)")
 	cmd.PersistentFlags().String("region", "", "API region: global, eu-de, us, uk, au")
 	cmd.PersistentFlags().String("api-key", "", "Clockify API key (overrides config)")
 	cmd.PersistentFlags().Bool("no-color", false, "disable colored output")

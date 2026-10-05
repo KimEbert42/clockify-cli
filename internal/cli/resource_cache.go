@@ -321,7 +321,16 @@ var (
 	completeClientRefC     = wrapCompletion(completeClientRef)
 	completeTagRefC        = wrapCompletion(completeTagRef)
 	completeUserRefC       = wrapCompletion(completeUserRef)
+	// completeTaskRefC is cache-backed project names as a best-effort fallback
+	// when no per-project task cache is warm (never blocks on the network).
+	completeTaskRefC = wrapCompletion(completeTaskRef)
 )
+
+func completeTaskRef(cmd *cobra.Command, toComplete string) ([]string, cobra.ShellCompDirective) {
+	// Task names are project-scoped; fall back to project names when task cache
+	// is unavailable so tab-complete still suggests something useful.
+	return completeCachedNames(cmd, workspaceIDFromCmd(cmd), compResourceProjects, toComplete)
+}
 
 func completeSubcommands(cmd *cobra.Command, toComplete string) []string {
 	var out []string
