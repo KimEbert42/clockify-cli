@@ -99,6 +99,11 @@ func TestReportSummaryJSON(t *testing.T) {
 	if reportsBody.Projects == nil || len(reportsBody.Projects.IDs) != 1 || reportsBody.Projects.IDs[0] != "p1" {
 		t.Errorf("project filter = %+v", reportsBody.Projects)
 	}
+	if reportsBody.SummaryFilter == nil || len(reportsBody.SummaryFilter.Groups) == 0 {
+		t.Errorf("summaryFilter.groups must be non-empty: %+v", reportsBody.SummaryFilter)
+	} else if reportsBody.SummaryFilter.Groups[0] != "PROJECT" {
+		t.Errorf("default group = %q, want PROJECT", reportsBody.SummaryFilter.Groups[0])
+	}
 
 	var raw map[string]any
 	if err := json.Unmarshal(buf.Bytes(), &raw); err != nil {

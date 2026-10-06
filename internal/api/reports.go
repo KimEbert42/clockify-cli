@@ -26,9 +26,16 @@ func (c *ClockifyClient) GenerateDetailedReport(ctx context.Context, req clockif
 
 // GenerateSummaryReport POSTs to /workspaces/{id}/reports/summary.
 // summaryFilter must be set by the caller (required by the API).
+// Clockify requires summaryFilter.groups with 1-3 values; default to PROJECT.
 func (c *ClockifyClient) GenerateSummaryReport(ctx context.Context, req clockify.ReportRequest) ([]byte, string, error) {
 	if req.SummaryFilter == nil {
 		req.SummaryFilter = &clockify.SummaryFilter{}
+	}
+	if len(req.SummaryFilter.Groups) == 0 {
+		req.SummaryFilter.Groups = []string{"PROJECT"}
+		if req.SummaryFilter.SummaryChartType == "" {
+			req.SummaryFilter.SummaryChartType = "PROJECT"
+		}
 	}
 	return c.postReport(ctx, "summary", req)
 }

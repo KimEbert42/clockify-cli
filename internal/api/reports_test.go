@@ -33,6 +33,9 @@ func TestGenerateSummaryReport(t *testing.T) {
 		if body.SummaryFilter == nil {
 			t.Errorf("summaryFilter missing")
 		}
+		if len(body.SummaryFilter.Groups) == 0 {
+			t.Errorf("summaryFilter.groups must not be empty: %+v", body.SummaryFilter)
+		}
 		if body.Billable == nil || !*body.Billable {
 			t.Errorf("billable filter not applied")
 		}

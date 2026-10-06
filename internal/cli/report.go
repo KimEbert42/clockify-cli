@@ -97,6 +97,7 @@ func newReportPresetCmd(name, startRel, endRel string) *cobra.Command {
 	cmd.Flags().Bool("billable", false, "show only billable time")
 	cmd.Flags().String("description", "", "filter by description")
 	cmd.Flags().Bool("detailed", false, "use detailed report instead of summary")
+	cmd.Flags().String("group-by", "PROJECT", "summary grouping (comma-separated: PROJECT, CLIENT, USER, TASK, TAG, DATE; 1-3 values)")
 	return cmd
 }
 
@@ -131,6 +132,7 @@ func newReportSummaryCmd() *cobra.Command {
 	addReportCommonFlags(cmd, true)
 	cmd.Flags().Bool("billable", false, "show only billable time")
 	cmd.Flags().String("description", "", "filter by description")
+	cmd.Flags().String("group-by", "PROJECT", "summary grouping (comma-separated: PROJECT, CLIENT, USER, TASK, TAG, DATE; 1-3 values)")
 	return cmd
 }
 
@@ -172,6 +174,7 @@ func runReport(kind string, requireEnd bool) func(cmd *cobra.Command, args []str
 		stdinParams, _ := cmd.Flags().GetBool("stdin")
 		billableOnly, _ := cmd.Flags().GetBool("billable")
 		description, _ := cmd.Flags().GetString("description")
+		groupBy, _ := cmd.Flags().GetString("group-by")
 
 		// Optional JSON params from --file or --stdin (spec §8.11 --file as input).
 		// When --export is set, --file is the output path instead.
@@ -315,7 +318,15 @@ func runReport(kind string, requireEnd bool) func(cmd *cobra.Command, args []str
 			if description != "" {
 				req.Description = description
 			}
-			req.SummaryFilter = &clockify.SummaryFilter{SummaryChartType: "PROJECT"}
+			// Clockify requires summaryFilter.groups with 1-3 values.
+			groups, err := parseReportGroups(groupBy)
+			if err != nil {
+				return err
+			}
+			req.SummaryFilter = &clockify.SummaryFilter{
+				Groups:           groups,
+				SummaryChartType: groups[0],
+			}
 		}
 		if kind == "detailed" {
 			req.DetailedFilter = &clockify.DetailedFilter{PageSize: 500}
@@ -402,6 +413,42 @@ func runReport(kind string, requireEnd bool) func(cmd *cobra.Command, args []str
 }
 
 func boolPtr(b bool) *bool { return &b }
+
+// parseReportGroups parses a comma-separated --group-by value into 1-3 Clockify
+// summary group dimensions. Defaults to PROJECT when empty.
+func parseReportGroups(raw string) ([]string, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return []string{"PROJECT"}, nil
+	}
+	valid := map[string]bool{
+		"PROJECT": true, "CLIENT": true, "USER": true, "TASK": true,
+		"TAG": true, "DATE": true, "DESCRIPTION": true, "BILLABLE": true,
+	}
+	var groups []string
+	seen := map[string]bool{}
+	for _, part := range strings.Split(raw, ",") {
+		g := strings.ToUpper(strings.TrimSpace(part))
+		if g == "" {
+			continue
+		}
+		if !valid[g] {
+			return nil, fmt.Errorf("invalid group %q; must be one of: PROJECT, CLIENT, USER, TASK, TAG, DATE, DESCRIPTION, BILLABLE", g)
+		}
+		if seen[g] {
+			continue
+		}
+		seen[g] = true
+		groups = append(groups, g)
+	}
+	if len(groups) == 0 {
+		return []string{"PROJECT"}, nil
+	}
+	if len(groups) > 3 {
+		return nil, fmt.Errorf("too many groups (%d); Clockify allows 1-3", len(groups))
+	}
+	return groups, nil
+}
 
 func readReportParamsFile(path string) (map[string]any, error) {
 	data, err := os.ReadFile(path)
