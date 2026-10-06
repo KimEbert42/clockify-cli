@@ -11,7 +11,28 @@ import (
 	"github.com/kim/clockify-cli/internal/api"
 	"github.com/kim/clockify-cli/internal/config"
 	"github.com/spf13/cobra"
+	"golang.org/x/term"
 )
+
+// readSecretLine prints prompt and reads a line without echoing when stdin is a TTY.
+func readSecretLine(prompt string) (string, error) {
+	fmt.Fprint(os.Stderr, prompt)
+	fd := int(os.Stdin.Fd())
+	if term.IsTerminal(fd) {
+		b, err := term.ReadPassword(fd)
+		fmt.Fprintln(os.Stderr)
+		if err != nil {
+			return "", err
+		}
+		return string(b), nil
+	}
+	r := bufio.NewReader(os.Stdin)
+	line, err := r.ReadString('\n')
+	if err != nil {
+		return line, err
+	}
+	return strings.TrimRight(line, "\r\n"), nil
+}
 
 var configureCmd = &cobra.Command{
 	Use:   "configure",
@@ -28,8 +49,7 @@ func runConfigure(cmd *cobra.Command, args []string) error {
 
 	reader := bufio.NewReader(os.Stdin)
 
-	fmt.Print("Enter your Clockify API key: ")
-	apiKey, err := reader.ReadString('\n')
+	apiKey, err := readSecretLine("Enter your Clockify API key: ")
 	if err != nil {
 		return fmt.Errorf("failed to read API key: %w", err)
 	}
@@ -73,7 +93,9 @@ func runConfigure(cmd *cobra.Command, args []string) error {
 		} else if len(workspaces) > 0 {
 			fmt.Printf("Found %d workspace(s):\n", len(workspaces))
 			for i, ws := range workspaces {
-				fmt.Printf("  %d. %s (%s)\n", i+1, ws["name"], ws["id"])
+				name, _ := ws["name"].(string)
+				id, _ := ws["id"].(string)
+				fmt.Printf("  %d. %s (%s)\n", i+1, name, id)
 			}
 			fmt.Print("Select workspace number [1]: ")
 			choiceStr, _ := reader.ReadString('\n')
@@ -85,7 +107,11 @@ func runConfigure(cmd *cobra.Command, args []string) error {
 			if err != nil || choice < 1 || choice > len(workspaces) {
 				return fmt.Errorf("invalid workspace selection: %s", choiceStr)
 			}
-			workspaceID = workspaces[choice-1]["id"].(string)
+			id, _ := workspaces[choice-1]["id"].(string)
+			if id == "" {
+				return fmt.Errorf("workspace %d has no usable id field", choice)
+			}
+			workspaceID = id
 		}
 	}
 
@@ -98,18 +124,27 @@ func runConfigure(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to load existing config: %w", err)
 	}
 
-	newCfg := config.Config{
-		Region:      region,
-		WorkspaceID: workspaceID,
+	// Merge-on-save: only overlay keys the wizard collected.
+	var base config.Config
+	if profile == "default" {
+		base = pc.Default
+	} else {
+		base = pc.Profiles[profile]
+	}
+	if region != "" {
+		base.Region = region
+	}
+	if workspaceID != "" {
+		base.WorkspaceID = workspaceID
 	}
 
 	if profile == "default" {
-		pc.Default = newCfg
+		pc.Default = base
 	} else {
 		if pc.Profiles == nil {
 			pc.Profiles = make(map[string]config.Config)
 		}
-		pc.Profiles[profile] = newCfg
+		pc.Profiles[profile] = base
 	}
 
 	if err := config.Save(pc); err != nil {

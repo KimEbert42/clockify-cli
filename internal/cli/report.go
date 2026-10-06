@@ -62,9 +62,13 @@ func newReportPresetCmd(name, startRel, endRel string) *cobra.Command {
 				if strings.Contains(end, "+") {
 					base := strings.SplitN(end, "+", 2)[0]
 					delta := strings.SplitN(end, "+", 2)[1]
-					t, err := duration.ParseRelativeDate(base, "monday")
+					t, err := duration.ParseRelativeDateEnd(base, "monday")
 					if err != nil {
-						return err
+						t, err = duration.ParseRelativeDate(base, "monday")
+						if err != nil {
+							return err
+						}
+						t = endOfDayLocal(t)
 					}
 					switch {
 					case strings.HasSuffix(delta, "d") && !strings.Contains(delta, "m"):
@@ -221,12 +225,17 @@ func runReport(kind string, requireEnd bool) func(cmd *cobra.Command, args []str
 		}
 		var endTime time.Time
 		if endRaw != "" {
-			endTime, err = parseReportDate(endRaw)
+			endTime, err = parseReportEndDate(endRaw)
 			if err != nil {
 				return fmt.Errorf("invalid end date: %w", err)
 			}
+			// Relative ends already land on period end; bare dates use EOD.
+			if !duration.IsRelativeDate(endRaw) {
+				endTime = time.Date(endTime.Year(), endTime.Month(), endTime.Day(), 23, 59, 59, 999999999, endTime.Location())
+			}
 		} else if kind == "weekly" {
-			endTime = startTime.AddDate(0, 0, 6)
+			endTime = time.Date(startTime.Year(), startTime.Month(), startTime.Day(), 23, 59, 59, 999999999, startTime.Location()).AddDate(0, 0, 6)
+			endTime = time.Date(endTime.Year(), endTime.Month(), endTime.Day(), 23, 59, 59, 999999999, endTime.Location())
 		} else {
 			return fmt.Errorf("must specify --end")
 		}
@@ -425,12 +434,20 @@ func mergeReportFileParams(req *clockify.ReportRequest, params map[string]any) {
 }
 
 // parseReportDate accepts relative shortcuts, human times, and YYYY-MM-DD / RFC3339 dates.
+// For range starts; relative tokens resolve to period start (midnight local).
 func parseReportDate(s string) (time.Time, error) {
 	return parseHumanStart(s, nil)
 }
 
+// parseReportEndDate is like parseReportDate but relative tokens resolve to the
+// inclusive period end (e.g. this-week → Sunday 23:59:59.999 local).
+func parseReportEndDate(s string) (time.Time, error) {
+	return parseHumanEnd(s, nil)
+}
+
 // formatReportDate renders times in the Clockify reports API format
 // (YYYY-MM-DDTHH:MM:SS.ssssss — microsecond precision).
+// endOfDay forces 23:59:59.999999 on the same calendar day (for non-relative ends).
 func formatReportDate(t time.Time, endOfDay bool) string {
 	if endOfDay {
 		return t.Format("2006-01-02") + "T23:59:59.999999"

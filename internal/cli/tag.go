@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/kim/clockify-cli/internal/api"
+	clierrors "github.com/kim/clockify-cli/internal/errors"
 	"github.com/kim/clockify-cli/pkg/clockify"
 	"github.com/spf13/cobra"
 )
@@ -143,12 +144,15 @@ func newTagCreateCmd() *cobra.Command {
 				return fmt.Errorf("must specify --name")
 			}
 
-			// Handle if-not-exists
+			// Handle if-not-exists — only swallow not-found.
 			if ifNotExists {
 				existing, err := resolveTagByName(ctx, client, name)
 				if err == nil {
 					cmd.Printf("Tag %s already exists (ID: %s).\n", existing.Name, existing.ID)
 					return formatOutput(cmd, existing, outputFormat, []string{"ID", "NAME", "COLOR"})
+				}
+				if cliErr, ok := err.(*clierrors.CLIError); !ok || cliErr.Code != clierrors.E002NotFound {
+					return err
 				}
 			}
 

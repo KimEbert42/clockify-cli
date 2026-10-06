@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/kim/clockify-cli/internal/api"
+	clierrors "github.com/kim/clockify-cli/internal/errors"
 	"github.com/kim/clockify-cli/pkg/clockify"
 	"github.com/spf13/cobra"
 )
@@ -186,12 +187,15 @@ func newClientCreateCmd() *cobra.Command {
 				return fmt.Errorf("must specify --name")
 			}
 
-			// Handle if-not-exists
+			// Handle if-not-exists — only swallow not-found.
 			if ifNotExists {
 				existing, err := resolveClientByName(ctx, client, name)
 				if err == nil {
 					cmd.Printf("Client %s already exists (ID: %s).\n", existing.Name, existing.ID)
 					return formatOutput(cmd, existing, outputFormat, []string{"ID", "NAME", "EMAIL", "ADDRESS", "PHONE", "NOTE"})
+				}
+				if cliErr, ok := err.(*clierrors.CLIError); !ok || cliErr.Code != clierrors.E002NotFound {
+					return err
 				}
 			}
 
@@ -423,7 +427,7 @@ func newClientDeleteCmd() *cobra.Command {
 }
 
 func resolveClientByName(ctx context.Context, client *api.ClockifyClient, name string) (*clockify.Client, error) {
-	clients, err := client.ListClients(ctx, api.ListClientsOpts{})
+	clients, _, err := fetchPaginatedClients(ctx, client, api.ListClientsOpts{}, 1, 500, true)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list clients: %w", err)
 	}

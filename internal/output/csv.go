@@ -50,7 +50,16 @@ func toMaps(data any) []map[string]any {
 func fromStruct(data any) []map[string]any {
 	val := reflect.ValueOf(data)
 	if val.Kind() == reflect.Ptr {
+		if val.IsNil() {
+			return nil
+		}
 		val = val.Elem()
+	}
+	if val.Kind() == reflect.Struct {
+		if m := structToMap(val); m != nil {
+			return []map[string]any{m}
+		}
+		return nil
 	}
 	if val.Kind() != reflect.Slice {
 		return nil
@@ -59,29 +68,44 @@ func fromStruct(data any) []map[string]any {
 	for i := 0; i < val.Len(); i++ {
 		item := val.Index(i)
 		if item.Kind() == reflect.Ptr {
+			if item.IsNil() {
+				continue
+			}
 			item = item.Elem()
 		}
 		if item.Kind() == reflect.Struct {
-			m := make(map[string]any)
-			t := item.Type()
-			for j := 0; j < t.NumField(); j++ {
-				field := t.Field(j)
-				tag := field.Tag.Get("yaml")
-				if tag == "" || tag == "-" {
-					tag = strings.ToLower(field.Name)
-				} else {
-					// Strip options like ",omitempty" so keys match header names
-					if i := strings.IndexByte(tag, ','); i >= 0 {
-						tag = tag[:i]
-					}
-					if tag == "" || tag == "-" {
-						tag = strings.ToLower(field.Name)
-					}
-				}
-				m[tag] = item.Field(j).Interface()
+			if m := structToMap(item); m != nil {
+				result = append(result, m)
 			}
-			result = append(result, m)
 		}
 	}
 	return result
+}
+
+func structToMap(item reflect.Value) map[string]any {
+	if item.Kind() != reflect.Struct {
+		return nil
+	}
+	m := make(map[string]any)
+	t := item.Type()
+	for j := 0; j < t.NumField(); j++ {
+		field := t.Field(j)
+		if field.PkgPath != "" { // unexported
+			continue
+		}
+		tag := field.Tag.Get("yaml")
+		if tag == "" || tag == "-" {
+			tag = strings.ToLower(field.Name)
+		} else {
+			// Strip options like ",omitempty" so keys match header names
+			if i := strings.IndexByte(tag, ','); i >= 0 {
+				tag = tag[:i]
+			}
+			if tag == "" || tag == "-" {
+				tag = strings.ToLower(field.Name)
+			}
+		}
+		m[tag] = item.Field(j).Interface()
+	}
+	return m
 }

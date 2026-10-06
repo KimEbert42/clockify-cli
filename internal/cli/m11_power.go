@@ -287,22 +287,11 @@ func runTimeEntrySplit(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	// Update original to end at first split point
-	firstReq := api.UpdateTimeEntryRequest{
-		Start:       entry.TimeInterval.Start.Format(time.RFC3339),
-		End:         points[0].Format(time.RFC3339),
-		ProjectID:   entry.ProjectID,
-		TaskID:      entry.TaskID,
-		Description: entry.Description,
-		Billable:    entry.Billable,
-		TagIDs:      entry.TagIDs,
-	}
-	if _, err := client.UpdateTimeEntry(ctx, entry.ID, firstReq); err != nil {
-		return err
-	}
-
+	// Create-then-update: build all new segments first; only then shrink the original.
+	// On mid-create failure, delete segments created in this call (best-effort rollback).
 	var created []clockify.TimeEntry
 	prev := points[0]
+	// First new segment starts at first split point
 	for i := 1; i < len(points); i++ {
 		req := api.CreateTimeEntryRequest{
 			Start:       prev.Format(time.RFC3339),
@@ -315,7 +304,8 @@ func runTimeEntrySplit(cmd *cobra.Command, args []string) error {
 		}
 		e, err := client.CreateTimeEntry(ctx, req)
 		if err != nil {
-			return err
+			rollbackSplitSegments(ctx, client, created)
+			return fmt.Errorf("split aborted after creating %d segment(s): %w (original entry left unchanged)", len(created), err)
 		}
 		created = append(created, *e)
 		prev = points[i]
@@ -332,12 +322,35 @@ func runTimeEntrySplit(cmd *cobra.Command, args []string) error {
 	}
 	e, err := client.CreateTimeEntry(ctx, remainder)
 	if err != nil {
-		return err
+		rollbackSplitSegments(ctx, client, created)
+		return fmt.Errorf("split aborted after creating %d segment(s): %w (original entry left unchanged)", len(created), err)
 	}
 	created = append(created, *e)
 
+	// Update original to end at first split point
+	firstReq := api.UpdateTimeEntryRequest{
+		Start:       entry.TimeInterval.Start.Format(time.RFC3339),
+		End:         points[0].Format(time.RFC3339),
+		ProjectID:   entry.ProjectID,
+		TaskID:      entry.TaskID,
+		Description: entry.Description,
+		Billable:    entry.Billable,
+		TagIDs:      entry.TagIDs,
+	}
+	if _, err := client.UpdateTimeEntry(ctx, entry.ID, firstReq); err != nil {
+		// Original still has full range; clean up created segments so we don't double-count.
+		rollbackSplitSegments(ctx, client, created)
+		return fmt.Errorf("split aborted while updating original entry: %w (created segments rolled back)", err)
+	}
+
 	cmd.Printf("Split %s into %d segments.\n", entry.ID, len(created))
 	return formatOutput(cmd, created, outputFormat, []string{"ID", "DESCRIPTION", "START", "END", "DURATION"})
+}
+
+func rollbackSplitSegments(ctx context.Context, client *api.ClockifyClient, created []clockify.TimeEntry) {
+	for i := range created {
+		_ = client.DeleteTimeEntry(ctx, created[i].ID)
+	}
 }
 
 func isTimeOnly(s string) bool {

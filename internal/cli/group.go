@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/kim/clockify-cli/internal/api"
+	clierrors "github.com/kim/clockify-cli/internal/errors"
 	"github.com/kim/clockify-cli/pkg/clockify"
 	"github.com/spf13/cobra"
 )
@@ -149,6 +150,8 @@ func newGroupCreateCmd() *cobra.Command {
 				if existing, err := resolveGroupByName(ctx, client, name); err == nil {
 					cmd.Printf("Group %s already exists (ID: %s).\n", existing.Name, existing.ID)
 					return formatOutput(cmd, existing, outputFormat, []string{"ID", "NAME", "USER_IDS"})
+				} else if cliErr, ok := err.(*clierrors.CLIError); !ok || cliErr.Code != clierrors.E002NotFound {
+					return err
 				}
 			}
 

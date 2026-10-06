@@ -38,3 +38,6 @@ Thumbs.db
 # Clockify config (contains sensitive data)
 # Users may want to track their config, so we only ignore the cache
 .clockify/cache/
+
+# Commit review automation logs (scripts/review-commits.sh)
+.review-logs/

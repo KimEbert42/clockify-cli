@@ -76,7 +76,7 @@ func TestFromHTTPStatus(t *testing.T) {
 		want   ErrorCode
 	}{
 		{401, E001Auth},
-		{403, E001Auth},
+		{403, E003Permission},
 		{404, E002NotFound},
 		{400, E004Validation},
 		{422, E004Validation},

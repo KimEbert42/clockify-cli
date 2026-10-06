@@ -47,10 +47,11 @@ func TestMaskAPIKey(t *testing.T) {
 
 func TestClientDebugRedactsAPIKey(t *testing.T) {
 	var out bytes.Buffer
-	old := os.Stdout
+	// Debug logs go to stderr (pipe-clean stdout for JSON).
+	old := os.Stderr
 	r, w, _ := os.Pipe()
-	os.Stdout = w
-	t.Cleanup(func() { os.Stdout = old })
+	os.Stderr = w
+	t.Cleanup(func() { os.Stderr = old })
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -69,7 +70,7 @@ func TestClientDebugRedactsAPIKey(t *testing.T) {
 	_ = w.Close()
 	buf := make([]byte, 4096)
 	n, _ := r.Read(buf)
-	os.Stdout = old
+	os.Stderr = old
 	out.Write(buf[:n])
 	combined := out.String()
 
@@ -91,7 +92,7 @@ func TestClientHandleErrorResponseMapping(t *testing.T) {
 		sugg   string
 	}{
 		{401, errors.E001Auth, "configure"},
-		{403, errors.E001Auth, "configure"},
+		{403, errors.E003Permission, ""},
 		{404, errors.E002NotFound, "Check the resource"},
 		{429, errors.E005RateLimit, "Wait a moment"},
 		{400, errors.E004Validation, ""},

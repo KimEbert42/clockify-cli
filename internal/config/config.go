@@ -46,12 +46,13 @@ func Load(profile string) (*Config, error) {
 		data, err := os.ReadFile(ConfigPath())
 		if err == nil {
 			var pc ProfileConfig
-			if err := yaml.Unmarshal(data, &pc); err == nil {
-				mergeConfig(&cfg, &pc.Default)
-				if profile != "" && profile != "default" {
-					if p, ok := pc.Profiles[profile]; ok {
-						mergeConfig(&cfg, &p)
-					}
+			if err := yaml.Unmarshal(data, &pc); err != nil {
+				return nil, fmt.Errorf("corrupt config %s: %w (fix or delete the file, then run 'clockify configure')", ConfigPath(), err)
+			}
+			mergeConfig(&cfg, &pc.Default)
+			if profile != "" && profile != "default" {
+				if p, ok := pc.Profiles[profile]; ok {
+					mergeConfig(&cfg, &p)
 				}
 			}
 		}

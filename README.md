@@ -27,9 +27,11 @@ Download from [Releases](https://github.com/kim/clockify-cli/releases), extract,
 Then:
 
 ```bash
-clockify update          # self-update later
+clockify update          # self-update later (requires a published GitHub Release)
 clockify update --check  # check only
 ```
+
+> Live `clockify update` needs a public GitHub repo + first Release tag. Until then install via `go install` or a local `make build`.
 
 ### Homebrew
 
@@ -37,7 +39,7 @@ clockify update --check  # check only
 brew tap kim/tap && brew install clockify
 ```
 
-> Tap publish is operational: requires the `kim/homebrew-tap` repo + first GitHub Release. Until then use `go install` or binaries.
+> Tap publish is operational: requires the `kim/homebrew-tap` repo + first GitHub Release. Until then use `go install` or binaries. GoReleaser skips brew publish when `HOMEBREW_TAP_GITHUB_TOKEN` is unset.
 
 ### npm
 
@@ -46,6 +48,8 @@ npm install -g clockify-cli
 # or scoped, if the unscoped name is taken:
 npm install -g @kim/clockify-cli
 ```
+
+> npm postinstall downloads a release binary and verifies `checksums.txt` (sha256). It needs a published GitHub Release; until then use `go install`.
 
 ### Build from source
 
@@ -229,7 +233,7 @@ echo "$out" | jq length
 | 0 | Success | |
 | 2 | E001 Auth | bad/missing API key |
 | 3 | E002 Not found | unknown resource |
-| 4 | E003 Permission | insufficient role |
+| 4 | E003 Permission | insufficient workspace role (HTTP 403) |
 | 5 | E005 Rate limit | 429 |
 | 6 | E006 Network | offline/timeout |
 | 7 | E007 Config | bad config values |
@@ -237,6 +241,8 @@ echo "$out" | jq length
 | 9 | E009 Server | API 5xx |
 | 10 | E004 Validation | bad flags/input |
 | 11 | E010 Internal | CLI bug |
+
+There is no exit code 12. 401 → E001 (exit 2); 403 → E003 (exit 4).
 
 Full error reference: [docs/errors/](docs/errors/). Errors print as:
 

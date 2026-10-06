@@ -189,11 +189,11 @@ func newInvoiceCreateCmd() *cobra.Command {
 				return fmt.Errorf("must specify --currency (e.g. USD, EUR)")
 			}
 
-			issued, err := parseDateTimeCLI(start)
+			issued, err := parseDateOnlyCLI(start)
 			if err != nil {
 				return fmt.Errorf("invalid --start: %w", err)
 			}
-			due, err := parseDateTimeCLI(end)
+			due, err := parseDateOnlyEndCLI(end)
 			if err != nil {
 				return fmt.Errorf("invalid --end: %w", err)
 			}
@@ -313,7 +313,7 @@ func newInvoiceUpdateCmd() *cobra.Command {
 				req.IssuedDate = issued
 			}
 			if end != "" {
-				due, err := parseDateTimeCLI(end)
+				due, err := parseDateOnlyEndCLI(end)
 				if err != nil {
 					return err
 				}

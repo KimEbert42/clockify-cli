@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/kim/clockify-cli/internal/api"
+	clierrors "github.com/kim/clockify-cli/internal/errors"
 	"github.com/kim/clockify-cli/pkg/clockify"
 	"github.com/kim/clockify-cli/pkg/duration"
 	"github.com/spf13/cobra"
@@ -87,11 +88,12 @@ func newTimeEntryListCmd() *cobra.Command {
 				startFilter = t.Format(time.RFC3339)
 			}
 			if endFilter != "" && duration.IsRelativeDate(endFilter) {
-				t, err := duration.ParseRelativeDateIn(endFilter, weekStart, locationFromConfig(cfg), time.Now())
+				// Inclusive period end (e.g. --end this-week = Sunday 23:59:59 local)
+				t, err := duration.ParseRelativeDateEndIn(endFilter, weekStart, locationFromConfig(cfg), time.Now())
 				if err != nil {
 					return fmt.Errorf("invalid end date: %w", err)
 				}
-				endFilter = time.Date(t.Year(), t.Month(), t.Day(), 23, 59, 59, 0, t.Location()).Format(time.RFC3339)
+				endFilter = t.Format(time.RFC3339)
 			}
 
 			// Default to today if no date filters provided
@@ -766,22 +768,29 @@ Input format (JSON array):
 				return fmt.Errorf("no time entries provided")
 			}
 
+			// Validate completeness before any writes: each entry needs end or duration.
+			for i, input := range inputEntries {
+				if input.End == "" && input.Duration == "" {
+					return fmt.Errorf("entry %d: must specify end or duration (bulk create does not start open timers)", i+1)
+				}
+			}
+
 			client := api.NewClient(apiKey, api.BaseURL(region), cfg.WorkspaceID)
 			ctx := context.Background()
 
 			var created []clockify.TimeEntry
-			var errors []string
+			var errs []string
 
 			for i, input := range inputEntries {
 				startTime, err := parseStartTimeFlexibleWith(input.Start, cfg)
 				if err != nil {
-					errors = append(errors, fmt.Sprintf("entry %d: invalid start time: %v", i+1, err))
+					errs = append(errs, fmt.Sprintf("entry %d: invalid start time: %v", i+1, err))
 					continue
 				}
 
 				projectID, taskID, tagIDs, err := resolveTimeEntryRefs(ctx, client, input.ProjectID, input.TaskID, strings.Join(input.TagIDs, ","))
 				if err != nil {
-					errors = append(errors, fmt.Sprintf("entry %d: %v", i+1, err))
+					errs = append(errs, fmt.Sprintf("entry %d: %v", i+1, err))
 					continue
 				}
 
@@ -797,7 +806,7 @@ Input format (JSON array):
 				if input.Duration != "" {
 					secs, err := duration.Parse(input.Duration)
 					if err != nil {
-						errors = append(errors, fmt.Sprintf("entry %d: invalid duration: %v", i+1, err))
+						errs = append(errs, fmt.Sprintf("entry %d: invalid duration: %v", i+1, err))
 						continue
 					}
 					endTime := startTime.Add(time.Duration(secs) * time.Second)
@@ -805,7 +814,7 @@ Input format (JSON array):
 				} else if input.End != "" {
 					endTime, err := parseStartTimeFlexibleWith(input.End, cfg)
 					if err != nil {
-						errors = append(errors, fmt.Sprintf("entry %d: invalid end time: %v", i+1, err))
+						errs = append(errs, fmt.Sprintf("entry %d: invalid end time: %v", i+1, err))
 						continue
 					}
 					req.End = endTime.Format(time.RFC3339)
@@ -813,21 +822,29 @@ Input format (JSON array):
 
 				entry, err := client.CreateTimeEntry(ctx, req)
 				if err != nil {
-					errors = append(errors, fmt.Sprintf("entry %d: %v", i+1, err))
+					errs = append(errs, fmt.Sprintf("entry %d: %v", i+1, err))
 					continue
 				}
 				created = append(created, *entry)
 			}
 
-			if len(errors) > 0 {
-				cmd.Printf("Created %d entries with %d errors:\n", len(created), len(errors))
-				for _, e := range errors {
+			if len(errs) > 0 {
+				cmd.Printf("Created %d entries with %d errors:\n", len(created), len(errs))
+				for _, e := range errs {
 					cmd.Printf("  - %s\n", e)
 				}
-			} else {
-				cmd.Printf("Created %d time entries.\n", len(created))
+				// Partial failure must be non-zero for CI/scripts.
+				if err := formatOutput(cmd, created, outputFormat, []string{"ID", "DESCRIPTION", "PROJECT", "DURATION", "START", "END"}); err != nil {
+					return err
+				}
+				return &clierrors.CLIError{
+					Code:    clierrors.E010Internal,
+					Message: fmt.Sprintf("bulk create finished with %d error(s) out of %d entries", len(errs), len(inputEntries)),
+					Suggestion: "fix the failed entries and re-run; already-created IDs are listed above",
+				}
 			}
 
+			cmd.Printf("Created %d time entries.\n", len(created))
 			return formatOutput(cmd, created, outputFormat, []string{"ID", "DESCRIPTION", "PROJECT", "DURATION", "START", "END"})
 		},
 	}

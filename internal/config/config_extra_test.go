@@ -254,17 +254,14 @@ func TestLoadRawParseError(t *testing.T) {
 	}
 }
 
-func TestLoadIgnoresCorruptConfig(t *testing.T) {
+func TestLoadFailsOnCorruptConfig(t *testing.T) {
 	withTempConfigHome(t)
 	path := ConfigPath()
 	_ = os.MkdirAll(filepath.Dir(path), 0700)
 	_ = os.WriteFile(path, []byte("{{{not yaml"), 0600)
-	cfg, err := Load("")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if cfg.Region != "global" {
-		t.Errorf("corrupt config should fall back to defaults: %+v", cfg)
+	_, err := Load("")
+	if err == nil {
+		t.Fatal("expected corrupt config to fail loudly")
 	}
 }
 

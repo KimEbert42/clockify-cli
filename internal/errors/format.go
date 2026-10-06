@@ -1,6 +1,7 @@
 package errors
 
 import (
+	"errors"
 	"fmt"
 	"io"
 )
@@ -31,18 +32,22 @@ func Fprint(w io.Writer, err error) {
 	fmt.Fprintln(w, Format(err))
 }
 
+// As finds the first CLIError in err's chain, including wrapped %w causes.
 func As(err error, target any) bool {
 	if err == nil || target == nil {
 		return false
 	}
+	// Prefer stdlib walk so %w chains are honored.
 	switch t := target.(type) {
 	case *CLIError:
-		if e, ok := err.(*CLIError); ok {
+		var e *CLIError
+		if errors.As(err, &e) {
 			*t = *e
 			return true
 		}
 	case **CLIError:
-		if e, ok := err.(*CLIError); ok {
+		var e *CLIError
+		if errors.As(err, &e) {
 			*t = e
 			return true
 		}

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -75,7 +76,7 @@ func (c *ClockifyClient) postReport(ctx context.Context, kind string, body any) 
 		req.Header.Set("Accept", "application/json, text/csv, application/pdf, */*")
 
 		if c.verbose {
-			fmt.Printf(">>> POST %s\n", url)
+			fmt.Fprintf(os.Stderr, ">>> POST %s\n", url)
 		}
 
 		resp, err := c.httpClient.Do(req)
@@ -95,7 +96,7 @@ func (c *ClockifyClient) postReport(ctx context.Context, kind string, body any) 
 		}
 
 		if c.debug {
-			fmt.Printf("<<< %s (%d bytes)\n", resp.Status, len(respBody))
+			fmt.Fprintf(os.Stderr, "<<< %s (%d bytes)\n", resp.Status, len(respBody))
 		}
 
 		if resp.StatusCode >= 200 && resp.StatusCode < 300 {

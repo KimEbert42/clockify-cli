@@ -69,7 +69,7 @@ func newExpenseListCmd() *cobra.Command {
 				opts.Start = s
 			}
 			if end != "" {
-				e, err := parseDateTimeCLI(end)
+				e, err := parseDateTimeEndCLI(end)
 				if err != nil {
 					return err
 				}

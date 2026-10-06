@@ -6,6 +6,8 @@ import (
 	"archive/zip"
 	"compress/gzip"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -219,6 +221,7 @@ func Check(ctx context.Context, client *Client, currentVersion string) (*CheckRe
 
 // Install downloads and replaces the running binary with the given release asset.
 // version may be empty for latest.
+// Assets are verified against the release checksums.txt (sha256) before extract.
 func Install(ctx context.Context, client *Client, version, goos, goarch string) (oldVersion, newVersion string, err error) {
 	oldVersion = NormalizeVersion(GetCurrentVersion())
 	var rel *Release
@@ -253,6 +256,11 @@ func Install(ctx context.Context, client *Client, version, goos, goarch string) 
 		return oldVersion, newVersion, err
 	}
 
+	// Fail closed: require checksums.txt match before replacing the binary.
+	if err := verifyChecksums(ctx, client, rel, *asset, assetPath); err != nil {
+		return oldVersion, newVersion, err
+	}
+
 	extracted, err := extractBinary(assetPath, tmpDir, binName)
 	if err != nil {
 		return oldVersion, newVersion, err
@@ -269,6 +277,73 @@ func Install(ctx context.Context, client *Client, version, goos, goarch string) 
 		return oldVersion, newVersion, err
 	}
 	return oldVersion, newVersion, nil
+}
+
+// verifyChecksums downloads checksums.txt from the release and checks asset sha256.
+func verifyChecksums(ctx context.Context, client *Client, rel *Release, asset Asset, assetPath string) error {
+	var sumsAsset *Asset
+	for i := range rel.Assets {
+		if strings.EqualFold(rel.Assets[i].Name, "checksums.txt") {
+			sumsAsset = &rel.Assets[i]
+			break
+		}
+	}
+	if sumsAsset == nil {
+		return fmt.Errorf("release %s is missing checksums.txt; refusing to install unverified binary", rel.TagName)
+	}
+
+	sumsPath := filepath.Join(filepath.Dir(assetPath), "checksums.txt")
+	if err := downloadFile(ctx, client.HTTP, sumsAsset.BrowserDownloadURL, sumsPath); err != nil {
+		return fmt.Errorf("failed to download checksums.txt: %w", err)
+	}
+	sums, err := os.ReadFile(sumsPath)
+	if err != nil {
+		return fmt.Errorf("failed to read checksums.txt: %w", err)
+	}
+
+	want, err := lookupSHA256(string(sums), asset.Name)
+	if err != nil {
+		return err
+	}
+	got, err := fileSHA256(assetPath)
+	if err != nil {
+		return fmt.Errorf("failed to hash %s: %w", asset.Name, err)
+	}
+	if !strings.EqualFold(want, got) {
+		return fmt.Errorf("checksum mismatch for %s: want %s got %s (refusing install)", asset.Name, want, got)
+	}
+	return nil
+}
+
+func fileSHA256(path string) (string, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+	h := sha256.New()
+	if _, err := io.Copy(h, f); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(h.Sum(nil)), nil
+}
+
+func lookupSHA256(sumsBody, filename string) (string, error) {
+	for _, line := range strings.Split(sumsBody, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		// format: <sha256>  <filename>  (or single space)
+		fields := strings.Fields(line)
+		if len(fields) < 2 {
+			continue
+		}
+		if fields[1] == filename || strings.HasSuffix(fields[1], "/"+filename) || filepath.Base(fields[1]) == filename {
+			return fields[0], nil
+		}
+	}
+	return "", fmt.Errorf("no checksum entry for %s in checksums.txt", filename)
 }
 
 func downloadFile(ctx context.Context, client *http.Client, url, dest string) error {

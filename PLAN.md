@@ -1,8 +1,8 @@
 # clockify-cli — Project Plan
 
 **Version:** 1.0.0
-**Date:** 2026-10-04
-**Status:** M10 Complete — v1.0.0
+**Date:** 2026-10-06
+**Status:** M10 Complete — v1.0.0 · Commit reviews: 17/17 + HEAD-triaged · **P0 debt sprint implemented 2026-10-06** (§5.8.4) · Remaining backlog: **P1+ / product decisions** · Live publish still blocked on public remote + first Release
 
 ---
 
@@ -779,7 +779,7 @@ M10 (Quality & Polish)
 |------|--------|------------|------------|
 | **Scope creep (18+ commands)** | High — delays delivery | High | Strict milestone boundaries; defer "nice-to-have" flags to later iterations |
 | **API changes during development** | Medium — rework required | Low | Pin to API version; abstract API client behind interface |
-| **Single developer bottleneck** | High — no review, bus factor | Medium | Comprehensive tests; clear architecture; document decisions |
+| **Single developer bottleneck** | High — no review, bus factor | Medium | Comprehensive tests; clear architecture; document decisions; **kims-team skill reviews every commit → `docs/reviews/`** (§5.7) |
 | **Clockify API auth changes** | High — breaks core functionality | Low | Auth is isolated in M1; abstract behind interface for easy replacement |
 
 ### 4.3 Decision Points
@@ -863,6 +863,301 @@ M10 (Quality & Polish)
 | **pip/AUR/Snap out of scope** | Listed in spec §7.2 but not in PLAN.md M9 deliverables; deferred post-M10. |
 | **main.go prints errors** | `SilenceErrors` + no print meant `update --check` failures were invisible; fixed in M9. |
 
+### 5.7 Commit Review Process (ongoing, post-v1.0.0)
+
+**Decision:** Every commit is reviewed by the **`kims-team`** skill before the work is considered done. Review output is stored under **`docs/reviews/`**.
+
+| Aspect | Convention |
+|--------|------------|
+| **Skill** | `kims-team` — Interactive Review or Auto-Assignment (match experts to the commit's domain) |
+| **Trigger** | After each commit; also before push/PR for uncommitted work |
+| **Storage path** | `docs/reviews/<short-sha>-<kebab-slug>.md` |
+| **Filename example** | `docs/reviews/a1b2c3d-time-entry-split.md` |
+| **Review contents** | Commit hash + subject, diff summary, expert perspectives (per role), findings, recommendations, conflict resolution |
+| **Conflict protocol** | Per kims-team: confidence-weighted → escalation → consensus report |
+| **Retention** | Reviews committed to the repo alongside the changes they cover |
+| **CI (future)** | Optional gate: fail if a commit lacks a matching `docs/reviews/` file — enable after public remote exists |
+
+**Rationale:** The single-developer bottleneck is an explicit project risk (§4.2). Structured team-skill reviews on every commit provide a lightweight audit trail without requiring a second human reviewer. The `docs/reviews/` folder keeps technical decisions, API discoveries, and dissent discoverable for future contributors, post-v1.0.0 plugin work, and any external audit.
+
+**How to run a review:**
+
+1. Commit the change (or stage the intended diff).
+2. Invoke the `kims-team` skill with the commit/diff as the task.
+3. Auto-Assignment (default): select experts by commit content (e.g. API client → Backend; CLI flags → Full Stack; security-sensitive → Security DevOps).
+4. Interactive: pick experts from `ROLES.md` when the change is ambiguous.
+5. Write the synthesized review to `docs/reviews/<short-sha>-<slug>.md`.
+6. Include the review file in the same commit (or a follow-up `docs: add review for <sha>` commit).
+
+**Review file template:**
+
+```markdown
+# Commit Review — <short-sha>
+
+- **Commit:** <full sha>
+- **Subject:** <commit subject>
+- **Date:** <YYYY-MM-DD>
+- **Experts engaged:** <role list>
+- **Skill mode:** Auto-Assignment | Interactive | Review Cycle
+
+## Diff summary
+<files changed + what the commit does>
+
+## Findings
+<per-expert observations, grouped by agreement/conflict>
+
+## Recommendations
+<actionable follow-ups>
+
+## Conflicts / unresolved
+<none | options with trade-offs | flagged for user decision>
+
+## Verdict
+<approve | approve with follow-ups | needs rework>
+```
+
+**Scope boundary:** This process is for **code and design review quality**. It does not replace `go test ./...`, coverage gates (M10), or the env-gated integration harness — those remain the mechanical correctness checks.
+
+#### Review Backlog (as of 2026-10-05)
+
+**Status:** 0/17 commits **pending** — **17/17 reviewed**. Artifacts: `docs/reviews/<short>-<slug>.md`. Each review now has a **`## HEAD triage (2026-10-05)`** section (one subagent per file) marking findings ✅ completed / ⚠️ partial / ❌ still open against `ac64914`. Historical SHA verdicts are unchanged. **needs rework (7):** `6342b33` M0, `0aac85a` M0 docs, `2dc8d27` M2, `df7e578` M2, `c6e07b1` M3, `f0d6787` M4, `7c70a1a` M11. **approve with follow-ups (10):** `70fd608`, `83f61fc`, `7214ea1`, `872f91b`, `4388f3e`, `817c831`, `3168f3e`, `969ca42`, `91b362b`, `ac64914`. Expected artifact: `docs/reviews/<short-sha>-<slug>.md` per §5.7.
+
+##### HEAD triage rollup (2026-10-05)
+
+| File | ✅ | ⚠️ | ❌ | ➖ | Notes |
+|------|---:|---:|---:|---:|-------|
+| `0aac85a-m0-plan-status.md` | 2 | 7 | 3 | 0 | M0 PLAN section still overclaims exit codes / keychain / criteria |
+| `2dc8d27-m2-sprint1-reads.md` | 1 | 3 | 12 | 1 | `pkg/clockify` restored; `--workspace` still dead; `ListUsers` page=0 |
+| `3168f3e-m7-secondary-resources.md` | 2 | 1 | 9 | 2 | tz `Z`, schedule/t-off/approval pagination, first-page resolvers, invoice aliases |
+| `4388f3e-m5-tasks.md` | 0 | 0 | 14 | 2 | fabricated PageInfo; unpaged `resolveTaskByName` |
+| `6342b33-m0-scaffolding.md` | 7 | 13 | 13 | 1 | MergeFlags unused; rate-limit/retry; E003 dead; debug→stdout |
+| `70fd608-project-init.md` | 1 | 9 | 2 | 2 | Spec never revised: exit-code tables + §3.6 hosts still wrong |
+| `7214ea1-keyring-api-validation.md` | 2 | 3 | 11 | 2 | configure key echo; live status; no profile keyring tests |
+| `7c70a1a-m11-ergonomics.md` | 0 | 0 | 20 | 0 | M10 did not touch M11 runtime; aliases/split/picker all open |
+| `817c831-m6-reports.md` | 0 | 0 | 11 | 1 | reports findings unfixed through M8–M11 |
+| `83f61fc-create-plan.md` | 3 | 2 | 4 | 1 | +5 new PLAN inconsistencies (ranks, M10 heading, §3.6 note) |
+| `872f91b-m1-complete.md` | 1 | 4 | 14 | 0 | cache-root wipe, configure field-wipe, silent `Load` still open |
+| `91b362b-m9-distribution.md` | 0 | 1 | 11 | 0 | no checksum verify; npm `execSync`; brews ungated; Windows paths |
+| `969ca42-m8-completion-power.md` | 1 | 1 | 10 | 2 | list-cache pagination + `--no-color` still dead |
+| `ac64914-m10-quality-docs.md` | 1 | 0 | 16 | 1 | coverage/lint non-blocking; E003 vs 403→E001; defer-in-loop |
+| `c6e07b1-m3-time-entry.md` | 2 | 7 | 22 | 0 | build fixed by M4; relative dates, `--hydrated`, single-struct output live |
+| `df7e578-m2-complete-pagination.md` | 0 | 0 | 19 | 1 | double-fetch + fabricated PageInfo not reworked; some copied later |
+| `f0d6787-m4-write-crud.md` | 3 | 0 | 10 | 0 | context items verified; all 10 original findings still open |
+
+**Highest-value live debt (cross-review themes):**
+
+1. **Pagination honesty** — double project-list fetch; fabricated `PageInfo` (replicated to tasks/M7); unpaged name resolvers; `internal/resolve` orphaned.
+2. **Query encoding** — list/API query builders still concat raw params.
+3. **Daily-driver M3** — relative end ranges collapse; list `--hydrated` no-op; single-struct table/CSV empty.
+4. **M11 ergonomics** — alias flags copy defect; split non-atomic; picker stdin; list default “today” undocumented.
+5. **M1 config/safety** — cache-root wipe on clear-cache; configure field-wipe; silent corrupt-config `Load`; key echo.
+6. **M9 distribution** — no `checksums.txt` verify; npm postinstall shell injection; brews not secret-gated; Windows npm/update paths.
+7. **M10 quality gates** — coverage/lint still non-blocking; E003 docs vs `FromHTTPStatus`; defer-in-loop body leaks.
+8. **Docs debt** — PLAN M0 section still overclaims; `clockify-cli-spec.md` exit codes + hosts never corrected.
+
+**Suggested order:** milestone order (foundation → daily driver → coverage → quality). Docs/chore commits can use a lighter review (single generalist) or be batched with the feature commit they document.
+
+| # | Commit | Date | Subject | Milestone | Review status | HEAD triage | Suggested experts |
+|---|--------|------|---------|-----------|---------------|-------------|-------------------|
+| 1 | `70fd608` | 2026-09-21 | chore: project init | M0 | ✅ Reviewed — **approve with follow-ups** | ✅1 ⚠️9 ❌2 ➖2 | Tech Team Lead (light) |
+| 2 | `83f61fc` | 2026-09-21 | doc: create plan | M0 | ✅ Reviewed — **approve with follow-ups** | ✅3 ⚠️2 ❌4 ➖1 | Architect (light) |
+| 3 | `6342b33` | 2026-09-21 | feat: M0 — scaffolding & core infrastructure | M0 | ✅ Reviewed — **needs rework** | ✅7 ⚠️13 ❌13 ➖1 | Architect, Full Stack Developer, Backend Engineer |
+| 4 | `0aac85a` | 2026-09-21 | docs: PLAN.md M0 completion status | M0 | ✅ Reviewed — **needs rework** | ✅2 ⚠️7 ❌3 ➖0 | Tech Team Lead (light) |
+| 5 | `7214ea1` | 2026-09-21 | feat: real keyring + API validation | M1 | ✅ Reviewed — **approve with follow-ups** | ✅2 ⚠️3 ❌11 ➖2 | Security DevOps, Backend |
+| 6 | `872f91b` | 2026-09-21 | feat: M1 complete — multi-profile, cache, status | M1 | ✅ Reviewed — **approve with follow-ups** | ✅1 ⚠️4 ❌14 ➖0 | Backend, Full Stack Developer |
+| 7 | `2dc8d27` | 2026-09-25 | feat: M2 Sprint 1 — workspace/user reads | M2 | ✅ Reviewed — **needs rework** | ✅1 ⚠️3 ❌12 ➖1 | Backend |
+| 8 | `df7e578` | 2026-09-29 | M2 complete — project/client/tag + pagination | M2 | ✅ Reviewed — **needs rework** | ✅0 ⚠️0 ❌19 ➖1 | Backend, Full Stack Developer |
+| 9 | `c6e07b1` | 2026-09-29 | feat: M3 — time entry core daily driver | M3 | ✅ Reviewed — **needs rework** | ✅2 ⚠️7 ❌22 ➖0 | Full Stack Developer, Backend, QA Engineer |
+| 10 | `f0d6787` | 2026-10-03 | feat: M4 — project/client/tag CRUD | M4 | ✅ Reviewed — **needs rework** | ✅0 ⚠️0 ❌10 ➖0 | Backend, Full Stack Developer |
+| 11 | `4388f3e` | 2026-10-03 | feat: M5 — task management CRUD | M5 | ✅ Reviewed — **approve with follow-ups** | ✅0 ⚠️0 ❌14 ➖2 | Backend |
+| 12 | `817c831` | 2026-10-03 | feat: M6 — reports & analytics | M6 | ✅ Reviewed — **approve with follow-ups** | ✅0 ⚠️0 ❌11 ➖1 | Backend, Full Stack Developer |
+| 13 | `3168f3e` | 2026-10-04 | feat: M7 — secondary resources (full API) | M7 | ✅ Reviewed — **approve with follow-ups** | ✅2 ⚠️1 ❌9 ➖2 | Backend, Architect |
+| 14 | `969ca42` | 2026-10-04 | feat: M8 — shell completion & power features | M8 | ✅ Reviewed — **approve with follow-ups** | ✅1 ⚠️1 ❌10 ➖2 | Full Stack Developer, DevOps |
+| 15 | `91b362b` | 2026-10-04 | feat: M9 — distribution & packaging | M9 | ✅ Reviewed — **approve with follow-ups** | ✅0 ⚠️1 ❌11 ➖0 | DevOps, Security DevOps |
+| 16 | `7c70a1a` | 2026-10-04 | feat: M11 — daily-driver ergonomics | M11 | ✅ Reviewed — **needs rework** | ✅0 ⚠️0 ❌20 ➖0 | Full Stack Developer, QA Engineer |
+| 17 | `ac64914` | 2026-10-05 | feat: M10 — quality, testing & docs (v1.0.0) | M10 | ✅ Reviewed — **approve with follow-ups** | ✅1 ⚠️0 ❌16 ➖1 | QA Engineer, Tech Team Lead, Security DevOps |
+
+**Triage legend:** ✅ completed at HEAD · ⚠️ partially fixed · ❌ still open · ➖ N/A or cannot verify. Counts are per review-file triage table; they are not a single unified backlog size.
+
+**Priority notes:**
+
+| Priority | Commits | Why |
+|----------|---------|-----|
+| **P0 — review first** | `6342b33` (M0), `c6e07b1` (M3), `ac64914` (M10) | Foundation patterns, the daily-driver feature, and the quality/release gate shape everything else |
+| **P1 — core API surface** | M1–M2, M4–M7 | Auth/keyring security-sensitive; CRUD + reports are the bulk of user-facing behavior |
+| **P2 — power & distribution** | M8, M9, M11 | Completions, self-update, ergonomics; lower regression risk once core is reviewed |
+| **P3 — docs/chore** | `70fd608`, `83f61fc`, `0aac85a` | Light review or batch with adjacent feature commits |
+
+**Not in backlog:** Future commits made after this plan update follow §5.7 live (review before work is considered done). This table is the **initial catch-up** list only.
+
+**Automation:** `scripts/review-commits.sh` (also `make reviews` / `make review-list`) drives `opencode run --auto` + kims-team for each pending commit. Logs land in `.review-logs/`. Flags: `--list`, `--dry-run`, `--only <sha>`, `--commit` (git-commit each review), `--force`.
+
+### 5.8 Review Debt Backlog (Team Triage)
+
+**Date:** 2026-10-05 · **HEAD:** `ac64914` · **Source:** all 17 `docs/reviews/` + HEAD triage tables  
+**Experts:** Tech Team Lead · CTO · Backend Engineer · QA Engineer (kims-team Auto-Assignment)  
+**Purpose:** Turn §5.7 review findings into an **item-level prioritized backlog**. §5.7 tracks *which commits were reviewed*; §5.8 tracks *what remains open and in what order*.
+
+#### 5.8.1 Corpus summary
+
+| Metric | Value |
+|--------|-------|
+| Review docs | 17 (init, plan, M0–M11, keyring/API validation) |
+| Verdicts | **needs rework 7** · **approve with follow-ups 10** · clean approve 0 |
+| Unique open work items | **~45–55** after dedup (not the ~180 per-row triage counts) |
+| Dominant root causes | Pagination/resolver honesty · flag precedence unwired · docs written to spec not code · CI gates that don't gate · false-green status DoD |
+
+**Consensus:** Reviews and HEAD triage are accurate. Priority ≠ review verdict — several “approve with follow-ups” SHAs carry the same live defect class as “needs rework” SHAs. Systemic fixes beat item-by-item patches.
+
+#### 5.8.2 Priority board
+
+**Legend:** Effort **XS** &lt;2h · **S** 2–4h · **M** ~1 day · **L** 2–3 days · **SPIKE** uncertain first.  
+**P0** = wrong billing data / broken headline path / security / false CI contract · **P1** = weekly user impact or systemic debt · **P2/P3** = polish/docs/cleanup.
+
+##### P0 — Release gate + daily-driver trust
+
+**Status legend:** ✅ implemented in P0 sprint (2026-10-06, working tree) · ⚠️ partial · ❌ open · 🅿️ product decision
+
+| ID | Status | Theme | Work | Effort | Sources (reviews) |
+|----|--------|-------|------|--------|-------------------|
+| **T04** | ✅ | Supply chain | sha256 verify vs `checksums.txt` in self-update + npm install; replace npm `execSync` with `execFile`/argv | M / S | M9 Criticals |
+| **T40** | ✅ | Packaging gate | Homebrew `brews:` publish conditional on secret presence (`skip_upload: auto`) | S | M9 Maj1 |
+| **T03** | ✅ | Headline UX | Alias flag inheritance (`in`/`out`/`ge`/`ce`) + Execute-level tests — README example fails at parse | S | M11 C1 |
+| **T01** | ✅ | Billing correctness | Relative **end** ranges (`--end this-week` = last day of week EOD, not period start) | S | M3 C2 |
+| **T02** | ✅ | Default output | Single-struct table/CSV/YAML empty after get/create/update/start/stop (`fromStruct` nil) | M | M3 C4 |
+| **T10** | ✅ | Write path | `split` atomicity (create-then-update or rollback + clear error) | M | M11 Maj1 |
+| **T09** | ✅ | HTTP client | Body close out of retry loop; `GetBody` rewind; honor `ctx`/`Retry-After`; debug/verbose → stderr | M | M0 C6, M2 M4, M10 #4 |
+| **T06** | ✅ | CI contract | Map **403→E003Permission** (keep 401→E001); one exit-code table in README/errors/PLAN | S | M0 M8, M10 #3 |
+| **T11–T13** | ✅ | Config safety | `clear-cache` per-profile only (`cache/profiles/<name>`); `configure` merge-on-save; `Load` fail-loud on corrupt YAML; hidden key input; comma-ok on `ws["id"]` | S–M | M1, keyring review |
+| **T08** | ✅ | Query encoding | `url.Values.Encode()` on all query builders; trim tags | S | M2, M3, M6 |
+| **T34** | ✅ | Quality gates | Lint **blocking** (drop `continue-on-error`); coverage threshold fails CI (`tools/coveragegate`); `-race` in `make test` | S | M10 #1/#2 |
+| **T07** | ⚠️ | Pagination (structural) | **Minimal honesty shipped:** header-derived `PageInfo`, omit `page/pageSize` when ≤0, single-fetch list (no double project list), paginate name resolvers. Full architecture / cache honesty / `internal/resolve` delete-or-wire → P1 | SPIKE → partial | M2→M8 (replicated) |
+| **T15/T33** | ⚠️ | Write path | `--if-not-exists` only swallows NotFound ✅; update clear-field semantics + seed `Archived`/`estimate` → P1 | M | M3 M8, M4 |
+| **T16** | ✅ | Bulk | Partial failure → non-zero exit (E010); require per-entry end/duration | S | M3 M9 |
+| **T29/T30** | ✅ | Secrets / panic | Hidden API-key input; comma-ok workspace id | XS | keyring review |
+| **T37** | ✅ | Errors | `errors.As` walk `%w`; `Format()` in `main.go`; debug/verbose → **stderr** | S | M0 M12+C5 |
+
+##### P1 — Next batch
+
+| ID | Status | Theme | Work |
+|----|--------|-------|------|
+| **T23–T26** | ❌ | Reports | Split `--file` dual-use (refuse write-back to params path); full params merge or error; expose detailed-report pagination; classify report network errors ≠ E005 |
+| **T20/T21/T22** | ❌ | M7 correctness | False-`Z` timezone formatting; schedule/time-off/approval list page flags; reject lossy invoice status aliases |
+| **T28** | 🅿️ | Status UX | Classification via error codes not substrings; offline/cache design (needs product call) |
+| **T14** | 🅿️ | `--hydrated` | Wire on list **or** drop flag + PLAN correction (spike 0.5d) |
+| **T18** | 🅿️ | List default | Bare `time-entry list` “today” — decide + document (needs product call) |
+| **T19/T44** | ❌ | Interactive | Single stdin reader for pickers; shared confirm helper (replace `fmt.Scanln`) |
+| **T27** | ❌ | Flag wiring | `--workspace` (and peers): wire precedence flag > env > profile **or** delete + fix lying error strings |
+| **T38/T39** | ❌ | Windows | npm bin `.exe` + `.cmd` shim; self-update rename-aside (only if npm/brew stays advertised) |
+| **T53/T54** | ⚠️ | Docs honesty | README exit-code table fixed (no 0–12; 403→E003) ✅; PLAN M0 section overclaims + spec exit-code/§3.6 hosts → still open |
+| **T07 remainder** | ❌ | Pagination | Full list-cache honesty; wire or delete `internal/resolve`; deeper resolver search if API allows |
+
+##### P2 / P3 — Batch later
+
+| Bucket | Items |
+|--------|-------|
+| Power polish | T23 remainder, T25 fold into T07, T42 completion task cache, T43 WeekStart/timeZone, T51 cache flags |
+| Docs-only | PLAN §3.1 ranks, missing M10 heading, conflicting confidence lines, closing-note §3.6 contradiction, spec historical annotation, M*-SPRINT-PLAN schema notes |
+| Cleanup | Dead code (`projectHasConflict`, `_ = lastPageInfo`, `InProgress`); `NO_COLOR` wire-or-delete (no ANSI today → P2) |
+| Won't fix | Historical commit metadata/typos; non-compiling SHAs at historical verdicts (tree is green at HEAD) |
+
+##### Product / API decisions (do not code around silently)
+
+| # | Question | Blocks | Recommendation |
+|---|----------|--------|----------------|
+| 1 | Bare `time-entry list` default “today” — intentional or regression? | T18 | Explicit flag + release note, or restore unbounded default |
+| 2 | `list --hydrated`: implement or remove? | T14 | Spike API schema; false no-op is worse than no flag |
+| 3 | Status live-validate vs cache/`--offline` | T28 | Cache last-validation + opt-out, or document live-only |
+| 4 | Clockify PUT without `archived` preserves state? | T32 | Live check on test workspace |
+| 5 | Public npm/brew/`update` imminent? | T04, T38–T40 | If yes → P0 packaging; if no → amend README install claims |
+| 6 | Keep `--api-key` persistent flag? | security | Keep for CI with README warning; deprecate later |
+| 7 | Invoice status aliases lossy map? | T22 | Reject lossy names or document one-to-one — never silent `ACCEPTED→PAID` |
+
+#### 5.8.3 Consolidated themes (dedup map)
+
+Do **not** re-enumerate per review row. Fix once per theme:
+
+| Theme | Overlapping review items |
+|-------|--------------------------|
+| **T07 Pagination/resolver architecture** | M2 C1+C2+M5, M4 #2, M5 M1/M2, M6 m7, M7 Maj2/Maj3, M8 Maj1 |
+| **T08 Query encoding** | M2 m1, M3 M5, M6 m7 |
+| **T09 HTTP client resilience** | M0 C6, M2 M4, M3 Min8, M10 #4, M6 M3 |
+| **T06 E003 / exit-code honesty** | M0 M8, M10 #3, 0aac85a C5, 70fd608 F3 |
+| **T34 CI quality gates** | M10 #1/#2, M9 m1 |
+| **T36/T37 logging + errors.Format** | M0 M12+C5, M10 #5/#7 |
+| **T15 Merge/clear semantics** | M3 M8, M4 #5, M8 m5, M11 Maj3 |
+| **T11–T13 Config safety** | M1 Maj1–Maj3, keyring Maj1/Maj3 |
+| **T53 PLAN/spec hygiene** | 0aac85a, 83f61fc, 70fd608, 6342b33 C5/C9/C10 |
+
+#### 5.8.4 Recommended next sprint
+
+**Goal:** *Make the daily driver trustworthy.*  
+**Capacity (solo):** ~6.5 productive days in a 2-week window (15% overhead + 20% rework buffer).
+
+| Day(s) | Scope | Status |
+|--------|-------|--------|
+| 1 | T01 + T02 (relative ends + single-struct output) | ✅ Implemented — `ParseRelativeDateEndIn`; `fromStruct` handles structs/pointers |
+| 1.5 | T03 alias inheritance + Execute-level regression | ✅ Implemented — `AddFlagSet` + `aliases_flags_test.go` |
+| 2 | T08 query encoding + special-char httptest | ✅ Implemented — `url.Values` in `appendQueryParams` / builders |
+| 2.5 | T11–T13 config safety bundle | ✅ Implemented — per-profile cache under `cache/profiles/<name>`; configure merge-on-save; `Load` fail-loud |
+| 3 | T06 + T36 + T37 (E003 mapper, stderr logs, errors.Format) | ✅ Implemented — 403→E003; `Format()` in main; `errors.As` unwraps `%w`; debug/verbose → stderr |
+| 3.5 | T10 split atomicity | ✅ Implemented — create-then-update + rollback helper |
+| 4 | T34 CI fail-closed gates | ✅ Implemented — lint blocking; `-race`; `tools/coveragegate` ≥80% core |
+| 4.5 | T04 + T05 security prereqs (checksums + npm execFile) | ✅ Implemented — Install/npm verify `checksums.txt`; npm `execFile` argv |
+| 5 | T29–T30 hidden key + comma-ok asserts | ✅ Implemented — `readSecretLine`; `ws["id"]` comma-ok |
+| 5.5–6.5 | **T07 spike → implement** if design risk ≤1d; else fix double-fetch + encode + workspace/project/task resolvers only | ✅ Minimal honesty — `ListProjectsPaged`/`Clients`/`Tags`/`Tasks` single-fetch + header PageInfo; resolvers paginate; zero pages omitted |
+| + | T15/T33 if-not-exists only NotFound | ✅ Implemented |
+| + | T16 bulk non-zero + require end/duration | ✅ Implemented |
+| + | T40 brews `skip_upload: auto` | ✅ Implemented |
+
+**DoD for sprint:** `go test ./...` green; regression tests for T01–T03, T06, T08, T34, T05; no silent behavior change on `time-entry list` default (T18 deferred — product decision first). — **Met** (`go test -race ./...` green; core coverage gate tool present).
+
+**Explicitly deprioritized this sprint:** M7/M6/M8 polish · Windows packaging (unless npm/brew stays advertised) · pure docs batch · live-API spikes (T14 hydrated, T17 409, T32 Archived) until credentials/workspace available · product decisions parked (T18, T28, T48).
+
+**Stretch if capacity remains:** T27 wire `--workspace` · T44 shared confirm · T16 bulk non-zero (**done**) · T40 brews gating (**done**) · T45–T46 estimate/`--client` consistency.
+
+#### 5.8.5 Process / governance (from CTO + QA consensus)
+
+Reviews worked; **completion gate did not**. Adopt:
+
+| # | Rule |
+|---|------|
+| **G1** | Milestone ✅ only after tree-verified evidence at the feat SHA (`go build`/`go test` clean; binary criteria only if buildable). Status docs cite the SHA they describe. |
+| **G2** | Every review recommendation not fixed in-landing becomes a §5.8 row. `needs rework` or open P0 blocks milestone COMPLETE until closed or explicitly re-scoped. |
+| **G3** | No public npm/brew/`update` advertising until P0 supply-chain items close — or README lines are amended now. |
+| **G4** | Status-doc liveness: if PLAN/spec/README contradicts HEAD behavior, fix code **or** claim in the next commit — never leave both false. |
+| **G5** | No-pattern-replication checklist: query builders → `url.Values`; pagination → real totals or honest omission; aliases → copy target flags; formatters → handle structs + slices; errors → `internal/errors`; secrets → no echo; resolvers → shared helper. |
+| **G6** | CI gates must **fail**: lint blocking, coverage threshold non-zero exit, `-race` in `make test`. |
+| **G7** | Cadence: Boy Scout 10–15% on touched files · quarterly ~1 week debt sprint · biweekly 1h re-tier of §5.8 using ✅/⚠️/❌. |
+
+**Capacity model:** Phase 0 (integrity) 70:30 debt:feature until P0 clear → Phase 1 (interest-rate paydown) 50:50 through P1 → steady state 30:70 with Boy Scout + debt sprint. Security/correctness on **billing data, credentials, or distribution trust** always beats new features.
+
+#### 5.8.6 Status tracking
+
+Use the same convention as §5.7 HEAD triage:
+
+| Status | Meaning |
+|--------|---------|
+| ✅ | Done at HEAD, covered by regression test |
+| ⚠️ | Partial — residual risk or incomplete wiring |
+| ❌ | Open |
+| 🅿️ | Product decision required (§5.8.2) |
+| 🧪 | Needs live API/creds to verify |
+| ➖ | Won't fix / historical |
+
+**Rollup (2026-10-06, after P0 sprint implementation):**
+
+| Bucket | Status |
+|--------|--------|
+| **P0 board** | ✅ T01–T04, T06, T08–T13, T16, T29–T30, T34, T37, T40 implemented + regression tests · ⚠️ T07 minimal honesty only · ⚠️ T15 partial (if-not-exists done; clear-field/Archived seed → P1) |
+| **Product decisions** | 🅿️ Still parked: T14 hydrated · T18 list default · T28 status cache · T32 archived PUT · T22 invoice aliases · public publish timing |
+| **CI / G6** | ✅ Lint blocking · `-race` · `tools/coveragegate` core ≥80% (all packages green) |
+| **Supply chain / G3** | ✅ Code fail-closed (checksums + npm execFile + brews `skip_upload: auto`) · Live brew/npm/`update` still needs public GitHub Release |
+| **Remaining P1** | Reports `--file` dual-use · M7 tz/pagination · Windows packaging · T07 architecture remainder · docs honesty (PLAN M0 claims + spec tables) · T19/T44 confirm/stdin · T27 `--workspace` |
+| **Evidence** | `go test -race ./...` green · core coverage: config 88.9% · output 91.9% · errors 89.9% · update 83.3% · resolve 100% · api 88.1% · duration 87.4% · clockify 86.1% · pre-commit review draft `docs/reviews/p0-sprint-daily-driver-trust.md` |
+
+**Update protocol:** Edit this section in the same commit that closes an item (status + evidence note). Do not invent a second backlog.
+
 ---
 
 ## 6. Appendix: Estimated Timeline Summary
@@ -921,4 +1216,4 @@ M10 (Quality & Polish)
 
 *Post-M1 review outcomes: estimates revised downward after M0–M5 actuals; open questions on batch endpoints and API versioning resolved; report API host confirmed via spec §3.6.*
 
-*Last updated: 2026-10-05 — **M10 complete → v1.0.0.** Quality: core coverage ≥80%, `ERROR [E00X]` + docs/errors short names, README, man pages, env-gated integration harness, CI size/coverage gates. Next (post-v1.0.0): push remote + GitHub Release; optional live integration; plugin system deferred.*
+*Last updated: 2026-10-06 — **M10 complete → v1.0.0.** Quality: core coverage ≥80%, `ERROR [E00X]` + docs/errors short names, README, man pages, env-gated integration harness, CI size/coverage gates. **Commit review process (§5.7):** complete catch-up — **17/17 commits reviewed** via `kims-team`; artifacts in `docs/reviews/`. **HEAD triage (2026-10-05):** each review file has `## HEAD triage` vs `ac64914`. **§5.8 Review Debt Backlog:** P0–P3 themes + process rules G1–G7. **P0 sprint (2026-10-06, §5.8.4):** implemented daily-driver trust — relative end ranges, single-struct output, alias flags, query encoding, config safety, 403→E003, Format/stderr, split atomicity, CI fail-closed, checksums + npm execFile, bulk exit codes, pagination single-fetch honesty. `go test -race ./...` green; core coveragegate all ≥80%. Sprint plan: `P0-SPRINT-PLAN.md`. Pre-commit review draft: `docs/reviews/p0-sprint-daily-driver-trust.md`. **Next:** commit + kims-team review (§5.7) · product decisions before T14/T18 · P1 remainder per §5.8.2 · public GitHub Release only after publish decision (G3) · plugin system deferred.*

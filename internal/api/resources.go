@@ -3,7 +3,9 @@ package api
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"strconv"
+	"strings"
 
 	"github.com/kim/clockify-cli/pkg/clockify"
 )
@@ -98,11 +100,14 @@ func (c *ClockifyClient) GetCurrentUser(ctx context.Context) (*clockify.User, er
 
 func (c *ClockifyClient) ListUsers(ctx context.Context, opts ListUsersOpts) ([]clockify.User, error) {
 	path := fmt.Sprintf("/workspaces/%s/users", c.workspaceID)
-	path = appendQueryParams(path, map[string]string{
-		"status":   opts.Status,
-		"page":     strconv.Itoa(opts.Page),
-		"pageSize": strconv.Itoa(opts.PageSize),
-	})
+	params := map[string]string{"status": opts.Status}
+	if opts.Page > 0 {
+		params["page"] = strconv.Itoa(opts.Page)
+	}
+	if opts.PageSize > 0 {
+		params["pageSize"] = strconv.Itoa(opts.PageSize)
+	}
+	path = appendQueryParams(path, params)
 
 	var users []clockify.User
 	err := c.Do(ctx, "GET", path, nil, &users)
@@ -110,18 +115,40 @@ func (c *ClockifyClient) ListUsers(ctx context.Context, opts ListUsersOpts) ([]c
 }
 
 func (c *ClockifyClient) ListProjects(ctx context.Context, opts ListProjectsOpts) ([]clockify.Project, error) {
+	projects, _, err := c.ListProjectsPaged(ctx, opts)
+	return projects, err
+}
+
+// ListProjectsPaged fetches one page of projects and returns header-derived PageInfo.
+func (c *ClockifyClient) ListProjectsPaged(ctx context.Context, opts ListProjectsOpts) ([]clockify.Project, *clockify.PageInfo, error) {
 	path := fmt.Sprintf("/workspaces/%s/projects", c.workspaceID)
-	path = appendQueryParams(path, map[string]string{
+	params := map[string]string{
 		"status":   opts.Status,
 		"clientId": opts.ClientID,
 		"search":   opts.Search,
-		"page":     strconv.Itoa(opts.Page),
-		"pageSize": strconv.Itoa(opts.PageSize),
-	})
+	}
+	if opts.Page > 0 {
+		params["page"] = strconv.Itoa(opts.Page)
+	}
+	if opts.PageSize > 0 {
+		params["pageSize"] = strconv.Itoa(opts.PageSize)
+	}
+	path = appendQueryParams(path, params)
 
 	var projects []clockify.Project
-	err := c.Do(ctx, "GET", path, nil, &projects)
-	return projects, err
+	pageInfo, err := c.DoWithPagination(ctx, "GET", path, nil, &projects)
+	if err != nil {
+		return nil, nil, err
+	}
+	if pageInfo != nil {
+		if pageInfo.Page == 0 {
+			pageInfo.Page = opts.Page
+		}
+		if pageInfo.PageSize == 0 {
+			pageInfo.PageSize = opts.PageSize
+		}
+	}
+	return projects, pageInfo, nil
 }
 
 func (c *ClockifyClient) GetProject(ctx context.Context, id string) (*clockify.Project, error) {
@@ -151,16 +178,36 @@ func (c *ClockifyClient) DeleteProject(ctx context.Context, id string) error {
 }
 
 func (c *ClockifyClient) ListClients(ctx context.Context, opts ListClientsOpts) ([]clockify.Client, error) {
+	clients, _, err := c.ListClientsPaged(ctx, opts)
+	return clients, err
+}
+
+// ListClientsPaged fetches one page of clients with header-derived PageInfo.
+func (c *ClockifyClient) ListClientsPaged(ctx context.Context, opts ListClientsOpts) ([]clockify.Client, *clockify.PageInfo, error) {
 	path := fmt.Sprintf("/workspaces/%s/clients", c.workspaceID)
-	path = appendQueryParams(path, map[string]string{
-		"search":   opts.Search,
-		"page":     strconv.Itoa(opts.Page),
-		"pageSize": strconv.Itoa(opts.PageSize),
-	})
+	params := map[string]string{"search": opts.Search}
+	if opts.Page > 0 {
+		params["page"] = strconv.Itoa(opts.Page)
+	}
+	if opts.PageSize > 0 {
+		params["pageSize"] = strconv.Itoa(opts.PageSize)
+	}
+	path = appendQueryParams(path, params)
 
 	var clients []clockify.Client
-	err := c.Do(ctx, "GET", path, nil, &clients)
-	return clients, err
+	pageInfo, err := c.DoWithPagination(ctx, "GET", path, nil, &clients)
+	if err != nil {
+		return nil, nil, err
+	}
+	if pageInfo != nil {
+		if pageInfo.Page == 0 {
+			pageInfo.Page = opts.Page
+		}
+		if pageInfo.PageSize == 0 {
+			pageInfo.PageSize = opts.PageSize
+		}
+	}
+	return clients, pageInfo, nil
 }
 
 func (c *ClockifyClient) GetClient(ctx context.Context, id string) (*clockify.Client, error) {
@@ -190,16 +237,36 @@ func (c *ClockifyClient) DeleteClient(ctx context.Context, id string) error {
 }
 
 func (c *ClockifyClient) ListTags(ctx context.Context, opts ListTagsOpts) ([]clockify.Tag, error) {
+	tags, _, err := c.ListTagsPaged(ctx, opts)
+	return tags, err
+}
+
+// ListTagsPaged fetches one page of tags with header-derived PageInfo.
+func (c *ClockifyClient) ListTagsPaged(ctx context.Context, opts ListTagsOpts) ([]clockify.Tag, *clockify.PageInfo, error) {
 	path := fmt.Sprintf("/workspaces/%s/tags", c.workspaceID)
-	path = appendQueryParams(path, map[string]string{
-		"search":   opts.Search,
-		"page":     strconv.Itoa(opts.Page),
-		"pageSize": strconv.Itoa(opts.PageSize),
-	})
+	params := map[string]string{"search": opts.Search}
+	if opts.Page > 0 {
+		params["page"] = strconv.Itoa(opts.Page)
+	}
+	if opts.PageSize > 0 {
+		params["pageSize"] = strconv.Itoa(opts.PageSize)
+	}
+	path = appendQueryParams(path, params)
 
 	var tags []clockify.Tag
-	err := c.Do(ctx, "GET", path, nil, &tags)
-	return tags, err
+	pageInfo, err := c.DoWithPagination(ctx, "GET", path, nil, &tags)
+	if err != nil {
+		return nil, nil, err
+	}
+	if pageInfo != nil {
+		if pageInfo.Page == 0 {
+			pageInfo.Page = opts.Page
+		}
+		if pageInfo.PageSize == 0 {
+			pageInfo.PageSize = opts.PageSize
+		}
+	}
+	return tags, pageInfo, nil
 }
 
 func (c *ClockifyClient) GetTag(ctx context.Context, id string) (*clockify.Tag, error) {
@@ -229,10 +296,19 @@ func (c *ClockifyClient) DeleteTag(ctx context.Context, id string) error {
 }
 
 func (c *ClockifyClient) ListTasks(ctx context.Context, projectID string, opts ListTasksOpts) ([]clockify.Task, error) {
+	tasks, _, err := c.ListTasksPaged(ctx, projectID, opts)
+	return tasks, err
+}
+
+// ListTasksPaged fetches one page of tasks with header-derived PageInfo.
+func (c *ClockifyClient) ListTasksPaged(ctx context.Context, projectID string, opts ListTasksOpts) ([]clockify.Task, *clockify.PageInfo, error) {
 	path := fmt.Sprintf("/workspaces/%s/projects/%s/tasks", c.workspaceID, projectID)
-	params := map[string]string{
-		"page":     strconv.Itoa(opts.Page),
-		"pageSize": strconv.Itoa(opts.PageSize),
+	params := map[string]string{}
+	if opts.Page > 0 {
+		params["page"] = strconv.Itoa(opts.Page)
+	}
+	if opts.PageSize > 0 {
+		params["pageSize"] = strconv.Itoa(opts.PageSize)
 	}
 	if opts.IsActive != nil {
 		params["is-active"] = strconv.FormatBool(*opts.IsActive)
@@ -240,8 +316,19 @@ func (c *ClockifyClient) ListTasks(ctx context.Context, projectID string, opts L
 	path = appendQueryParams(path, params)
 
 	var tasks []clockify.Task
-	err := c.Do(ctx, "GET", path, nil, &tasks)
-	return tasks, err
+	pageInfo, err := c.DoWithPagination(ctx, "GET", path, nil, &tasks)
+	if err != nil {
+		return nil, nil, err
+	}
+	if pageInfo != nil {
+		if pageInfo.Page == 0 {
+			pageInfo.Page = opts.Page
+		}
+		if pageInfo.PageSize == 0 {
+			pageInfo.PageSize = opts.PageSize
+		}
+	}
+	return tasks, pageInfo, nil
 }
 
 func (c *ClockifyClient) GetTask(ctx context.Context, projectID, taskID string) (*clockify.Task, error) {
@@ -356,53 +443,56 @@ func (c *ClockifyClient) BulkUpdateTimeEntries(ctx context.Context, userID strin
 }
 
 func appendQueryParams(path string, params map[string]string) string {
-	first := true
+	vals := url.Values{}
 	for k, v := range params {
 		if v == "" {
 			continue
 		}
-		if first {
-			path += "?"
-			first = false
-		} else {
-			path += "&"
-		}
-		path += k + "=" + v
+		vals.Set(k, v)
 	}
-	return path
+	enc := vals.Encode()
+	if enc == "" {
+		return path
+	}
+	sep := "?"
+	if strings.Contains(path, "?") {
+		sep = "&"
+	}
+	return path + sep + enc
 }
 
 func buildTimeEntryQueryParams(opts ListTimeEntriesOpts) string {
-	params := ""
-	if opts.Start != "" {
-		params += "start=" + opts.Start + "&"
-	}
-	if opts.End != "" {
-		params += "end=" + opts.End + "&"
-	}
-	if opts.ProjectID != "" {
-		params += "project=" + opts.ProjectID + "&"
-	}
-	if opts.TaskID != "" {
-		params += "task=" + opts.TaskID + "&"
-	}
-	if opts.Tags != "" {
-		params += "tags=" + opts.Tags + "&"
-	}
-	if opts.Description != "" {
-		params += "description=" + opts.Description + "&"
-	}
-	if opts.InProgress != "" {
-		params += "in-progress=" + opts.InProgress + "&"
+	params := map[string]string{
+		"start":       opts.Start,
+		"end":         opts.End,
+		"project":     opts.ProjectID,
+		"task":        opts.TaskID,
+		"tags":        opts.Tags,
+		"description": opts.Description,
+		"in-progress": opts.InProgress,
 	}
 	if opts.Page > 0 {
-		params += fmt.Sprintf("page=%d&", opts.Page)
+		params["page"] = strconv.Itoa(opts.Page)
 	}
 	if opts.PageSize > 0 {
-		params += fmt.Sprintf("pageSize=%d&", opts.PageSize)
+		params["pageSize"] = strconv.Itoa(opts.PageSize)
 	}
-	if len(params) > 0 && params[len(params)-1] == '&' {
-		params = params[:len(params)-1]
+	return encodeQueryParams(params)
+}
+
+// encodeQueryParams encodes non-empty params with url.Values.
+func encodeQueryParams(params map[string]string) string {
+	return EncodeQueryParams(params)
+}
+
+// EncodeQueryParams encodes non-empty params with url.Values.
+func EncodeQueryParams(params map[string]string) string {
+	vals := url.Values{}
+	for k, v := range params {
+		if v == "" {
+			continue
+		}
+		vals.Set(k, v)
 	}
-	return params
+	return vals.Encode()
 }

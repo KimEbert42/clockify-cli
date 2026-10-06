@@ -10,17 +10,26 @@ import (
 // DefaultListCacheTTL is how long list/completion cache entries stay fresh.
 const DefaultListCacheTTL = 20 * time.Minute
 
+// ClearCache removes cache files for a single profile only.
+// Never deletes the cache root (which holds sibling profile caches).
 func ClearCache(profile string) (bool, error) {
 	target := ProfileCacheDir(profile)
 
-	if _, err := os.Stat(target); os.IsNotExist(err) {
-		return false, nil
-	}
-
-	if err := os.RemoveAll(target); err != nil {
+	entries, err := os.ReadDir(target)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return false, nil
+		}
 		return false, err
 	}
-
+	if len(entries) == 0 {
+		return false, nil
+	}
+	for _, e := range entries {
+		if err := os.RemoveAll(filepath.Join(target, e.Name())); err != nil {
+			return false, err
+		}
+	}
 	return true, nil
 }
 

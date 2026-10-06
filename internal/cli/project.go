@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/kim/clockify-cli/internal/api"
+	clierrors "github.com/kim/clockify-cli/internal/errors"
 	"github.com/kim/clockify-cli/pkg/clockify"
 	"github.com/spf13/cobra"
 )
@@ -208,12 +209,15 @@ func newProjectCreateCmd() *cobra.Command {
 				return fmt.Errorf("must specify --name")
 			}
 
-			// Handle if-not-exists
+			// Handle if-not-exists — only swallow not-found (not auth/validation).
 			if ifNotExists {
 				existing, err := resolveProjectByName(ctx, client, name)
 				if err == nil {
 					cmd.Printf("Project %s already exists (ID: %s).\n", existing.Name, existing.ID)
 					return formatOutput(cmd, existing, outputFormat, []string{"ID", "NAME", "CLIENT_ID", "BILLABLE", "STATUS", "COLOR"})
+				}
+				if cliErr, ok := err.(*clierrors.CLIError); !ok || cliErr.Code != clierrors.E002NotFound {
+					return err
 				}
 			}
 
@@ -505,7 +509,7 @@ func parseEstimateDuration(estimate string) (int64, error) {
 }
 
 func resolveProjectByName(ctx context.Context, client *api.ClockifyClient, name string) (*clockify.Project, error) {
-	projects, err := client.ListProjects(ctx, api.ListProjectsOpts{})
+	projects, _, err := fetchPaginatedProjects(ctx, client, api.ListProjectsOpts{}, 1, 500, true)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list projects: %w", err)
 	}

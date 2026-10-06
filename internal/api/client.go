@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
+	"strconv"
 	"time"
 
 	"github.com/kim/clockify-cli/internal/errors"
@@ -80,31 +82,42 @@ func NewClient(apiKey, baseURL, workspaceID string, opts ...ClientOption) *Clock
 }
 
 func (c *ClockifyClient) Do(ctx context.Context, method, path string, body any, result any) error {
-	var bodyReader io.Reader
+	var bodyBytes []byte
 	if body != nil {
-		jsonBytes, err := json.Marshal(body)
+		var err error
+		bodyBytes, err = json.Marshal(body)
 		if err != nil {
 			return errors.Wrap(errors.E010Internal, "failed to marshal request body", err)
 		}
-		bodyReader = bytes.NewReader(jsonBytes)
 	}
 
 	url := c.baseURL + path
-	req, err := http.NewRequestWithContext(ctx, method, url, bodyReader)
-	if err != nil {
-		return errors.Wrap(errors.E010Internal, "failed to create request", err)
-	}
-
-	req.Header.Set("X-Api-Key", c.apiKey)
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Accept", "application/json")
-
-	if c.verbose {
-		fmt.Printf(">>> %s %s\n", method, url)
-	}
 
 	var lastErr error
 	for attempt := 0; attempt <= c.retryPolicy.MaxRetries; attempt++ {
+		var bodyReader io.Reader
+		if bodyBytes != nil {
+			bodyReader = bytes.NewReader(bodyBytes)
+		}
+		req, err := http.NewRequestWithContext(ctx, method, url, bodyReader)
+		if err != nil {
+			return errors.Wrap(errors.E010Internal, "failed to create request", err)
+		}
+		if bodyBytes != nil {
+			req.ContentLength = int64(len(bodyBytes))
+			req.GetBody = func() (io.ReadCloser, error) {
+				return io.NopCloser(bytes.NewReader(bodyBytes)), nil
+			}
+		}
+
+		req.Header.Set("X-Api-Key", c.apiKey)
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Accept", "application/json")
+
+		if c.verbose {
+			fmt.Fprintf(os.Stderr, ">>> %s %s\n", method, url)
+		}
+
 		c.rateLimiter.Take()
 
 		resp, err := c.httpClient.Do(req)
@@ -117,32 +130,41 @@ func (c *ClockifyClient) Do(ctx context.Context, method, path string, body any, 
 			return errors.Wrap(errors.E006Network, "request failed", err)
 		}
 
-		defer resp.Body.Close()
-
 		if c.debug {
-			// Never print raw credentials; status line only.
-			fmt.Printf("<<< %d %s (api-key=%s)\n", resp.StatusCode, resp.Status, MaskAPIKey(c.apiKey))
+			fmt.Fprintf(os.Stderr, "<<< %d %s (api-key=%s)\n", resp.StatusCode, resp.Status, MaskAPIKey(c.apiKey))
 		}
 
 		if resp.StatusCode >= 200 && resp.StatusCode < 300 {
 			if result != nil && resp.StatusCode != 204 {
 				respBody, err := io.ReadAll(resp.Body)
+				resp.Body.Close()
 				if err != nil {
 					return errors.Wrap(errors.E010Internal, "failed to read response body", err)
 				}
 				if err := json.Unmarshal(respBody, result); err != nil {
 					return errors.Wrap(errors.E010Internal, "failed to unmarshal response", err)
 				}
+			} else {
+				resp.Body.Close()
 			}
 			return nil
 		}
 
 		if c.retryPolicy.RetryableFn(resp.StatusCode, nil) && attempt < c.retryPolicy.MaxRetries {
+			resp.Body.Close()
+			if ra := resp.Header.Get("Retry-After"); ra != "" {
+				if secs, err := strconv.Atoi(ra); err == nil && secs >= 0 {
+					time.Sleep(time.Duration(secs) * time.Second)
+					continue
+				}
+			}
 			time.Sleep(c.retryPolicy.Delay(attempt))
 			continue
 		}
 
-		return c.handleErrorResponse(resp)
+		err = c.handleErrorResponse(resp)
+		resp.Body.Close()
+		return err
 	}
 
 	return errors.Wrap(errors.E006Network, "max retries exceeded", lastErr)
@@ -158,6 +180,8 @@ func (c *ClockifyClient) handleErrorResponse(resp *http.Response) error {
 	switch code {
 	case errors.E001Auth:
 		return &errors.CLIError{Code: code, Message: msg, Detail: detail, Suggestion: "Run 'clockify configure' to set up your API key"}
+	case errors.E003Permission:
+		return &errors.CLIError{Code: code, Message: msg, Detail: detail, Suggestion: "Ask a workspace admin for a role with the required permissions"}
 	case errors.E002NotFound:
 		return &errors.CLIError{Code: code, Message: msg, Detail: detail, Suggestion: "Check the resource ID or name"}
 	case errors.E005RateLimit:
@@ -172,60 +196,59 @@ func (c *ClockifyClient) WorkspaceID() string {
 }
 
 func (c *ClockifyClient) DoWithPagination(ctx context.Context, method, path string, body any, result any) (*clockify.PageInfo, error) {
-	var bodyReader io.Reader
+	var bodyBytes []byte
 	if body != nil {
-		jsonBytes, err := json.Marshal(body)
+		var err error
+		bodyBytes, err = json.Marshal(body)
 		if err != nil {
 			return nil, errors.Wrap(errors.E010Internal, "failed to marshal request body", err)
 		}
-		bodyReader = bytes.NewReader(jsonBytes)
 	}
 
 	url := c.baseURL + path
-	req, err := http.NewRequestWithContext(ctx, method, url, bodyReader)
-	if err != nil {
-		return nil, errors.Wrap(errors.E010Internal, "failed to create request", err)
-	}
 
-	req.Header.Set("X-Api-Key", c.apiKey)
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Accept", "application/json")
-
-		if c.verbose {
-			fmt.Printf(">>> %s %s\n", method, url)
+	var lastErr error
+	for attempt := 0; attempt <= c.retryPolicy.MaxRetries; attempt++ {
+		var bodyReader io.Reader
+		if bodyBytes != nil {
+			bodyReader = bytes.NewReader(bodyBytes)
+		}
+		req, err := http.NewRequestWithContext(ctx, method, url, bodyReader)
+		if err != nil {
+			return nil, errors.Wrap(errors.E010Internal, "failed to create request", err)
+		}
+		if bodyBytes != nil {
+			req.ContentLength = int64(len(bodyBytes))
+			req.GetBody = func() (io.ReadCloser, error) {
+				return io.NopCloser(bytes.NewReader(bodyBytes)), nil
+			}
 		}
 
-		var lastErr error
-		for attempt := 0; attempt <= c.retryPolicy.MaxRetries; attempt++ {
-			c.rateLimiter.Take()
+		req.Header.Set("X-Api-Key", c.apiKey)
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Accept", "application/json")
 
-			resp, err := c.httpClient.Do(req)
-			if err != nil {
-				lastErr = err
-				if c.retryPolicy.RetryableFn(0, err) && attempt < c.retryPolicy.MaxRetries {
-					time.Sleep(c.retryPolicy.Delay(attempt))
-					continue
-				}
-				return nil, errors.Wrap(errors.E006Network, "request failed", err)
+		if c.verbose {
+			fmt.Fprintf(os.Stderr, ">>> %s %s\n", method, url)
+		}
+
+		c.rateLimiter.Take()
+
+		resp, err := c.httpClient.Do(req)
+		if err != nil {
+			lastErr = err
+			if c.retryPolicy.RetryableFn(0, err) && attempt < c.retryPolicy.MaxRetries {
+				time.Sleep(c.retryPolicy.Delay(attempt))
+				continue
 			}
+			return nil, errors.Wrap(errors.E006Network, "request failed", err)
+		}
 
-			defer resp.Body.Close()
-
-			if c.debug {
-				fmt.Printf("<<< %d %s (api-key=%s)\n", resp.StatusCode, resp.Status, MaskAPIKey(c.apiKey))
-			}
+		if c.debug {
+			fmt.Fprintf(os.Stderr, "<<< %d %s (api-key=%s)\n", resp.StatusCode, resp.Status, MaskAPIKey(c.apiKey))
+		}
 
 		if resp.StatusCode >= 200 && resp.StatusCode < 300 {
-			if result != nil && resp.StatusCode != 204 {
-				respBody, err := io.ReadAll(resp.Body)
-				if err != nil {
-					return nil, errors.Wrap(errors.E010Internal, "failed to read response body", err)
-				}
-				if err := json.Unmarshal(respBody, result); err != nil {
-					return nil, errors.Wrap(errors.E010Internal, "failed to unmarshal response", err)
-				}
-			}
-
 			pageInfo := &clockify.PageInfo{}
 			if tp := resp.Header.Get("X-Pagination-Total-Pages"); tp != "" {
 				fmt.Sscanf(tp, "%d", &pageInfo.TotalPages)
@@ -233,15 +256,42 @@ func (c *ClockifyClient) DoWithPagination(ctx context.Context, method, path stri
 			if tr := resp.Header.Get("X-Pagination-Total-Results"); tr != "" {
 				fmt.Sscanf(tr, "%d", &pageInfo.TotalResults)
 			}
+			if p := resp.Header.Get("X-Pagination-Page"); p != "" {
+				fmt.Sscanf(p, "%d", &pageInfo.Page)
+			}
+			if ps := resp.Header.Get("X-Pagination-Page-Size"); ps != "" {
+				fmt.Sscanf(ps, "%d", &pageInfo.PageSize)
+			}
+			if result != nil && resp.StatusCode != 204 {
+				respBody, err := io.ReadAll(resp.Body)
+				resp.Body.Close()
+				if err != nil {
+					return nil, errors.Wrap(errors.E010Internal, "failed to read response body", err)
+				}
+				if err := json.Unmarshal(respBody, result); err != nil {
+					return nil, errors.Wrap(errors.E010Internal, "failed to unmarshal response", err)
+				}
+			} else {
+				resp.Body.Close()
+			}
 			return pageInfo, nil
 		}
 
 		if c.retryPolicy.RetryableFn(resp.StatusCode, nil) && attempt < c.retryPolicy.MaxRetries {
+			resp.Body.Close()
+			if ra := resp.Header.Get("Retry-After"); ra != "" {
+				if secs, err := strconv.Atoi(ra); err == nil && secs >= 0 {
+					time.Sleep(time.Duration(secs) * time.Second)
+					continue
+				}
+			}
 			time.Sleep(c.retryPolicy.Delay(attempt))
 			continue
 		}
 
-		return nil, c.handleErrorResponse(resp)
+		err = c.handleErrorResponse(resp)
+		resp.Body.Close()
+		return nil, err
 	}
 
 	return nil, errors.Wrap(errors.E006Network, "max retries exceeded", lastErr)

@@ -6,6 +6,7 @@ import (
 	"compress/gzip"
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -498,6 +499,70 @@ func TestInstallHappyPath(t *testing.T) {
 	_ = gz.Close()
 	_ = f.Close()
 
+	sum, err := fileSHA256(tgz)
+	if err != nil {
+		t.Fatal(err)
+	}
+	checksums := fmt.Sprintf("%s  clockify_1.2.3_linux_amd64.tar.gz\n", sum)
+	sumsPath := filepath.Join(dir, "checksums.txt")
+	_ = os.WriteFile(sumsPath, []byte(checksums), 0644)
+
+	downloadSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/checksums.txt":
+			http.ServeFile(w, r, sumsPath)
+		default:
+			http.ServeFile(w, r, tgz)
+		}
+	}))
+	t.Cleanup(downloadSrv.Close)
+
+	apiSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode(Release{
+			TagName: "v1.2.3",
+			Assets: []Asset{
+				{
+					Name:               "clockify_1.2.3_linux_amd64.tar.gz",
+					BrowserDownloadURL: downloadSrv.URL + "/clockify_1.2.3_linux_amd64.tar.gz",
+				},
+				{
+					Name:               "checksums.txt",
+					BrowserDownloadURL: downloadSrv.URL + "/checksums.txt",
+				},
+			},
+		})
+	}))
+	t.Cleanup(apiSrv.Close)
+
+	c := NewClient()
+	c.APIBase = apiSrv.URL
+	c.HTTP = apiSrv.Client()
+
+	// Install replaces the running test binary path — use CurrentExecutable which
+	// may be the go test binary; ReplaceExecutable can still succeed on linux.
+	old, newV, err := Install(context.Background(), c, "", "linux", "amd64")
+	if err != nil {
+		t.Fatalf("Install() error = %v", err)
+	}
+	if newV != "1.2.3" {
+		t.Errorf("newVersion=%q", newV)
+	}
+	_ = old
+}
+
+func TestInstallMissingChecksumsFailsClosed(t *testing.T) {
+	dir := t.TempDir()
+	tgz := filepath.Join(dir, "clockify_1.2.3_linux_amd64.tar.gz")
+	f, _ := os.Create(tgz)
+	gz := gzip.NewWriter(f)
+	tw := tar.NewWriter(gz)
+	body := []byte("#!/bin/sh\n")
+	_ = tw.WriteHeader(&tar.Header{Name: "clockify", Mode: 0755, Size: int64(len(body))})
+	_, _ = tw.Write(body)
+	_ = tw.Close()
+	_ = gz.Close()
+	_ = f.Close()
+
 	downloadSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.ServeFile(w, r, tgz)
 	}))
@@ -518,16 +583,62 @@ func TestInstallHappyPath(t *testing.T) {
 	c.APIBase = apiSrv.URL
 	c.HTTP = apiSrv.Client()
 
-	// Install replaces the running test binary path — use CurrentExecutable which
-	// may be the go test binary; ReplaceExecutable can still succeed on linux.
-	old, newV, err := Install(context.Background(), c, "", "linux", "amd64")
-	if err != nil {
-		t.Fatalf("Install() error = %v", err)
+	_, _, err := Install(context.Background(), c, "", "linux", "amd64")
+	if err == nil || !strings.Contains(err.Error(), "checksums.txt") {
+		t.Fatalf("expected missing checksums error, got %v", err)
 	}
-	if newV != "1.2.3" {
-		t.Errorf("newVersion=%q", newV)
+}
+
+func TestInstallChecksumMismatchFailsClosed(t *testing.T) {
+	dir := t.TempDir()
+	tgz := filepath.Join(dir, "clockify_1.2.3_linux_amd64.tar.gz")
+	f, _ := os.Create(tgz)
+	gz := gzip.NewWriter(f)
+	tw := tar.NewWriter(gz)
+	body := []byte("#!/bin/sh\n")
+	_ = tw.WriteHeader(&tar.Header{Name: "clockify", Mode: 0755, Size: int64(len(body))})
+	_, _ = tw.Write(body)
+	_ = tw.Close()
+	_ = gz.Close()
+	_ = f.Close()
+
+	sumsPath := filepath.Join(dir, "checksums.txt")
+	_ = os.WriteFile(sumsPath, []byte(strings.Repeat("0", 64)+"  clockify_1.2.3_linux_amd64.tar.gz\n"), 0644)
+
+	downloadSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/checksums.txt" {
+			http.ServeFile(w, r, sumsPath)
+			return
+		}
+		http.ServeFile(w, r, tgz)
+	}))
+	t.Cleanup(downloadSrv.Close)
+
+	apiSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode(Release{
+			TagName: "v1.2.3",
+			Assets: []Asset{
+				{
+					Name:               "clockify_1.2.3_linux_amd64.tar.gz",
+					BrowserDownloadURL: downloadSrv.URL + "/clockify_1.2.3_linux_amd64.tar.gz",
+				},
+				{
+					Name:               "checksums.txt",
+					BrowserDownloadURL: downloadSrv.URL + "/checksums.txt",
+				},
+			},
+		})
+	}))
+	t.Cleanup(apiSrv.Close)
+
+	c := NewClient()
+	c.APIBase = apiSrv.URL
+	c.HTTP = apiSrv.Client()
+
+	_, _, err := Install(context.Background(), c, "", "linux", "amd64")
+	if err == nil || !strings.Contains(err.Error(), "checksum mismatch") {
+		t.Fatalf("expected checksum mismatch error, got %v", err)
 	}
-	_ = old
 }
 
 func TestHintContainsVersion(t *testing.T) {

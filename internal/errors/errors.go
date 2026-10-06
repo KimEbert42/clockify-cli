@@ -131,8 +131,11 @@ func (e *CLIError) ExitCode() int {
 
 func FromHTTPStatus(status int) ErrorCode {
 	switch {
-	case status == 401 || status == 403:
+	case status == 401:
 		return E001Auth
+	case status == 403:
+		// Insufficient workspace role — distinct from bad/missing API key.
+		return E003Permission
 	case status == 404:
 		return E002NotFound
 	case status == 400 || status == 422:

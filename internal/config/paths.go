@@ -38,9 +38,21 @@ func CacheDir() string {
 func ProfileCacheDir(profile string) string {
 	base := CacheDir()
 	if profile != "" && profile != "default" {
-		return filepath.Join(base, profile)
+		return filepath.Join(base, "profiles", profile)
 	}
-	return base
+	// Default profile uses a dedicated subdir so clear-cache never wipes
+	// sibling named-profile caches living under the cache root.
+	return filepath.Join(base, "profiles", "default")
+}
+
+// DefaultProfileCacheDir returns the cache directory for the default profile.
+func DefaultProfileCacheDir() string {
+	return ProfileCacheDir("default")
+}
+
+// ProfileCacheRoot returns the parent directory that contains all profile caches.
+func ProfileCacheRoot() string {
+	return filepath.Join(CacheDir(), "profiles")
 }
 
 func EnsureCacheDir(profile string) error {

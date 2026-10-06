@@ -1,7 +1,6 @@
 package main
 
 import (
-	"errors"
 	"fmt"
 	"os"
 
@@ -18,9 +17,10 @@ var (
 func main() {
 	cli.SetBuildInfo(version, commit, date)
 	if err := cli.Execute(); err != nil {
-		fmt.Fprintln(os.Stderr, "Error:", err)
+		// E00X format + Learn more on stderr; stdout stays pipe-clean.
+		fmt.Fprintln(os.Stderr, clierrors.Format(err))
 		var cliErr *clierrors.CLIError
-		if errors.As(err, &cliErr) {
+		if clierrors.As(err, &cliErr) {
 			os.Exit(cliErr.ExitCode())
 		}
 		os.Exit(1)

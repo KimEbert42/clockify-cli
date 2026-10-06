@@ -336,12 +336,15 @@ func newTaskCreateCmd() *cobra.Command {
 				assigneeIDs = []string{uid}
 			}
 
-			// Handle if-not-exists (scoped to project)
+			// Handle if-not-exists (scoped to project) — only swallow not-found.
 			if ifNotExists {
 				existing, err := resolveTaskByName(ctx, client, proj.ID, name)
 				if err == nil {
 					cmd.Printf("Task %s already exists (ID: %s).\n", existing.Name, existing.ID)
 					return formatOutput(cmd, existing, outputFormat, []string{"ID", "NAME", "STATUS", "ESTIMATE", "ASSIGNEE", "BILLABLE"})
+				}
+				if cliErr, ok := err.(*clierrors.CLIError); !ok || cliErr.Code != clierrors.E002NotFound {
+					return err
 				}
 			}
 
@@ -626,7 +629,7 @@ func resolveProjectRef(ctx context.Context, client *api.ClockifyClient, ref stri
 }
 
 func resolveTaskByName(ctx context.Context, client *api.ClockifyClient, projectID, name string) (*clockify.Task, error) {
-	tasks, err := client.ListTasks(ctx, projectID, api.ListTasksOpts{})
+	tasks, _, err := fetchPaginatedTasks(ctx, client, projectID, api.ListTasksOpts{}, 1, 500, true)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list tasks: %w", err)
 	}

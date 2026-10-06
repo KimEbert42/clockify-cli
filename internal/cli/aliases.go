@@ -17,14 +17,19 @@ func registerAliases(root *cobra.Command) {
 	for alias, target := range aliases {
 		parts := splitCommand(target)
 		cmd := findCommand(root, parts)
-		if cmd != nil {
-			root.AddCommand(&cobra.Command{
-				Use:   alias,
-				Short: cmd.Short,
-				RunE:  cmd.RunE,
-				Run:   cmd.Run,
-			})
+		if cmd == nil {
+			continue
 		}
+		aliasCmd := &cobra.Command{
+			Use:   alias,
+			Short: cmd.Short,
+			RunE:  cmd.RunE,
+			Run:   cmd.Run,
+		}
+		// Inherit flags so README examples like `clockify in --project X` parse.
+		aliasCmd.Flags().AddFlagSet(cmd.Flags())
+		aliasCmd.PersistentFlags().AddFlagSet(cmd.PersistentFlags())
+		root.AddCommand(aliasCmd)
 	}
 }
 

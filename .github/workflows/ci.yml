@@ -22,15 +22,15 @@ jobs:
         uses: golangci/golangci-lint-action@v6
         with:
           version: latest
-        continue-on-error: true
 
-      - name: Test
-        run: go test ./...
+      - name: Test (race)
+        run: go test -race ./...
 
-      - name: Coverage
+      - name: Coverage + core gate
         run: |
           go test ./... -coverprofile=cover.out -covermode=atomic
           go tool cover -func=cover.out | tail -1
+          go run ./tools/coveragegate cover.out
 
       - name: Build
         run: go build -o clockify ./cmd/clockify

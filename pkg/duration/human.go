@@ -16,6 +16,8 @@ var (
 
 // ParseRelativeDateIn parses a relative date using the provided location and now.
 // loc defaults to time.Local; now defaults to time.Now() in loc.
+// Returns the **start** of the period (midnight local). For inclusive range
+// ends use ParseRelativeDateEndIn.
 func ParseRelativeDateIn(s, weekStart string, loc *time.Location, now time.Time) (time.Time, error) {
 	if loc == nil {
 		loc = time.Local
@@ -43,6 +45,36 @@ func ParseRelativeDateIn(s, weekStart string, loc *time.Location, now time.Time)
 	default:
 		return time.Time{}, fmt.Errorf("unknown relative date %q: supported values are today, yesterday, this-week, last-week, this-month, last-month", s)
 	}
+}
+
+// ParseRelativeDateEndIn parses a relative date as the inclusive **end** of that
+// period (23:59:59.999999999 local on the last day). Use this for --end flags.
+func ParseRelativeDateEndIn(s, weekStart string, loc *time.Location, now time.Time) (time.Time, error) {
+	start, err := ParseRelativeDateIn(s, weekStart, loc, now)
+	if err != nil {
+		return time.Time{}, err
+	}
+	if loc == nil {
+		loc = time.Local
+	}
+	// Normalize to loc
+	start = start.In(loc)
+	switch s {
+	case "today", "yesterday":
+		return endOfDay(start, loc), nil
+	case "this-week", "last-week":
+		// Week runs 7 days from start
+		return endOfDay(start.AddDate(0, 0, 6), loc), nil
+	case "this-month", "last-month":
+		// Last day of the month that contains start
+		return endOfDay(time.Date(start.Year(), start.Month(), 1, 0, 0, 0, 0, loc).AddDate(0, 1, -1), loc), nil
+	default:
+		return endOfDay(start, loc), nil
+	}
+}
+
+func endOfDay(d time.Time, loc *time.Location) time.Time {
+	return time.Date(d.Year(), d.Month(), d.Day(), 23, 59, 59, 999999999, loc)
 }
 
 // ParseHumanDateTime parses human-friendly date/time strings into a time.Time.

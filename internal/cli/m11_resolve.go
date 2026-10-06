@@ -216,3 +216,60 @@ func parseHumanStartAt(s string, cfg *config.Config, now time.Time) (time.Time, 
 	loc := locationFromConfig(cfg)
 	return duration.ParseHumanDateTime(s, loc, now)
 }
+
+// parseHumanEnd parses a range-end value. Relative tokens use inclusive period end.
+func parseHumanEnd(s string, cfg *config.Config) (time.Time, error) {
+	return parseHumanEndAt(s, cfg, time.Now())
+}
+
+func parseHumanEndAt(s string, cfg *config.Config, now time.Time) (time.Time, error) {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return time.Time{}, fmt.Errorf("empty date/time value")
+	}
+	loc := locationFromConfig(cfg)
+	weekStart := weekStartFromConfig(cfg)
+	if duration.IsRelativeDate(s) {
+		return duration.ParseRelativeDateEndIn(s, weekStart, loc, now)
+	}
+	return duration.ParseHumanDateTime(s, loc, now)
+}
+
+func endOfDayLocal(t time.Time) time.Time {
+	loc := t.Location()
+	return time.Date(t.Year(), t.Month(), t.Day(), 23, 59, 59, 999999999, loc)
+}
+
+// parseDateTimeEndCLI is like parseDateTimeCLI but relative tokens resolve to
+// the inclusive period end.
+func parseDateTimeEndCLI(s string) (string, error) {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return "", fmt.Errorf("empty date/time value")
+	}
+	if duration.IsRelativeDate(s) {
+		t, err := parseHumanEnd(s, nil)
+		if err != nil {
+			return "", err
+		}
+		return t.Format("2006-01-02T15:04:05.000000Z"), nil
+	}
+	return parseDateTimeCLI(s)
+}
+
+// parseDateOnlyEndCLI is like parseDateOnlyCLI but relative tokens resolve to
+// the last day of the period.
+func parseDateOnlyEndCLI(s string) (string, error) {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return "", fmt.Errorf("empty date value")
+	}
+	if duration.IsRelativeDate(s) {
+		t, err := parseHumanEnd(s, nil)
+		if err != nil {
+			return "", err
+		}
+		return t.Format("2006-01-02"), nil
+	}
+	return parseDateOnlyCLI(s)
+}

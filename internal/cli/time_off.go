@@ -49,7 +49,7 @@ func newTimeOffListCmd() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("invalid --start: %w", err)
 			}
-			endISO, err := parseDateTimeCLI(end)
+			endISO, err := parseDateTimeEndCLI(end)
 			if err != nil {
 				return fmt.Errorf("invalid --end: %w", err)
 			}
@@ -170,7 +170,7 @@ func newTimeOffCreateCmd() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("invalid --start: %w", err)
 			}
-			endISO, err := parseDateTimeCLI(end)
+			endISO, err := parseDateTimeEndCLI(end)
 			if err != nil {
 				return fmt.Errorf("invalid --end: %w", err)
 			}

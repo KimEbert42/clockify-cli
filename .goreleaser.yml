@@ -64,6 +64,8 @@ release:
   draft: false
   prerelease: auto
 
+# Homebrew tap publish is optional: skipped when HOMEBREW_TAP_GITHUB_TOKEN
+# is absent so tag releases still ship binaries + checksums without a tap repo.
 brews:
   - repository:
       owner: kim
@@ -73,6 +75,7 @@ brews:
     homepage: https://github.com/kim/clockify-cli
     description: Command-line interface for Clockify time tracking
     license: MIT
+    skip_upload: auto
     install: |
       bin.install "clockify"
     test: |

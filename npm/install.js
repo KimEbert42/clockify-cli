@@ -8,7 +8,8 @@
 const fs = require("fs");
 const path = require("path");
 const https = require("https");
-const { execSync } = require("child_process");
+const crypto = require("crypto");
+const { execFile } = require("child_process");
 const { pipeline } = require("stream/promises");
 const { createWriteStream } = require("fs");
 const { createGunzip } = require("zlib");
@@ -111,18 +112,66 @@ function pickAsset(assets) {
   return exact || candidates[0];
 }
 
+function fileSHA256(filePath) {
+  return new Promise((resolve, reject) => {
+    const hash = crypto.createHash("sha256");
+    const stream = fs.createReadStream(filePath);
+    stream.on("error", reject);
+    stream.on("data", (chunk) => hash.update(chunk));
+    stream.on("end", () => resolve(hash.digest("hex")));
+  });
+}
+
+function lookupSHA256(sumsBody, filename) {
+  for (const rawLine of sumsBody.split("\n")) {
+    const line = rawLine.trim();
+    if (!line || line.startsWith("#")) continue;
+    const fields = line.split(/\s+/);
+    if (fields.length < 2) continue;
+    if (fields[1] === filename || fields[1].endsWith("/" + filename) || path.basename(fields[1]) === filename) {
+      return fields[0];
+    }
+  }
+  throw new Error(`no checksum entry for ${filename} in checksums.txt`);
+}
+
+async function verifyChecksums(release, asset, archivePath) {
+  const sumsAsset = (release.assets || []).find(
+    (a) => a.name.toLowerCase() === "checksums.txt"
+  );
+  if (!sumsAsset) {
+    throw new Error(
+      `release ${release.tag_name} is missing checksums.txt; refusing to install unverified binary`
+    );
+  }
+  const sumsPath = path.join(path.dirname(archivePath), "checksums.txt");
+  await download(sumsAsset.browser_download_url, sumsPath);
+  const sumsBody = fs.readFileSync(sumsPath, "utf8");
+  const want = lookupSHA256(sumsBody, asset.name).toLowerCase();
+  const got = (await fileSHA256(archivePath)).toLowerCase();
+  if (want !== got) {
+    throw new Error(`checksum mismatch for ${asset.name}: want ${want} got ${got}`);
+  }
+}
+
+function execFileAsync(cmd, args) {
+  return new Promise((resolve, reject) => {
+    execFile(cmd, args, { stdio: "inherit" }, (err) => {
+      if (err) reject(err);
+      else resolve();
+    });
+  });
+}
+
 async function extractBinary(archivePath, binPath) {
   const os = goos();
   if (archivePath.endsWith(".zip")) {
-    // Use system unzip when available; otherwise fail with guidance.
-    execSync(`unzip -o -j "${archivePath}" clockify* -d "${path.dirname(binPath)}"`, {
-      stdio: "inherit",
-    });
-    // normalize name
+    // argv-array only — never interpolate paths into a shell string
+    await execFileAsync("unzip", ["-o", "-j", archivePath, "clockify*", "-d", path.dirname(binPath)]);
     const extracted = path.join(path.dirname(binPath), os === "windows" ? "clockify.exe" : "clockify");
     if (extracted !== binPath) fs.renameSync(extracted, binPath);
   } else if (archivePath.endsWith(".tar.gz")) {
-    execSync(`tar -xzf "${archivePath}" -C "${path.dirname(binPath)}"`, { stdio: "inherit" });
+    await execFileAsync("tar", ["-xzf", archivePath, "-C", path.dirname(binPath)]);
     const extracted = path.join(path.dirname(binPath), "clockify");
     if (extracted !== binPath) fs.renameSync(extracted, binPath);
   } else {
@@ -150,6 +199,7 @@ async function main() {
   const asset = pickAsset(release.assets || []);
   const tmp = path.join(binDir, asset.name);
   await download(asset.browser_download_url, tmp);
+  await verifyChecksums(release, asset, tmp);
   await extractBinary(tmp, binPath);
   try {
     fs.unlinkSync(tmp);
