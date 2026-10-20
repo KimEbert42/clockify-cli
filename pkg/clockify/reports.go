@@ -136,6 +136,11 @@ type ReportGroup struct {
 	Date        string        `json:"date,omitempty"`
 	TimeEntries []ReportEntry `json:"timeentries,omitempty"`
 	Totals      *ReportTotals `json:"totals,omitempty"`
+
+	// Weekly report nesting: projects contain users (children), users
+	// contain per-day rows (days).
+	Children []ReportGroup `json:"children,omitempty"`
+	Days     []ReportGroup `json:"days,omitempty"`
 }
 
 // ReportResponse is a best-effort typed view of reports API output.
