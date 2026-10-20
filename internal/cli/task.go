@@ -16,9 +16,11 @@ import (
 )
 
 var validTaskStatuses = map[string]bool{
-	"TODO":        true,
-	"IN_PROGRESS": true,
+	"ACTIVE":      true,
 	"DONE":        true,
+	"ALL":         true,
+	"TODO":        true, // alias → ACTIVE
+	"IN_PROGRESS": true, // alias → ACTIVE
 }
 
 func newTaskCmd() *cobra.Command {
@@ -77,7 +79,7 @@ func newTaskDoneCmd() *cobra.Command {
 			}
 			req := clockify.UpdateTaskRequest{
 				Name:        existing.Name,
-				Estimate:    existing.Estimate,
+				Estimate:    existing.Estimate.ISO8601(),
 				Status:      "DONE",
 				AssigneeIDs: existing.AssigneeIDs,
 				IsBillable:  &existing.IsBillable,
@@ -208,8 +210,8 @@ func newTaskListCmd() *cobra.Command {
 			var displays []taskDisplay
 			for _, t := range tasks {
 				est := ""
-				if t.Estimate != nil && t.Estimate.Estimate > 0 {
-					est = duration.Format(t.Estimate.Estimate)
+				if t.Estimate > 0 {
+					est = duration.Format(t.Estimate.Int64())
 				}
 				assignee := ""
 				if len(t.AssigneeIDs) > 0 {
@@ -290,8 +292,8 @@ func newTaskCreateCmd() *cobra.Command {
 				name = jsonReq.Name
 				status = jsonReq.Status
 				billable = jsonReq.IsBillable
-				if jsonReq.Estimate != nil && jsonReq.Estimate.Estimate > 0 {
-					estimate = fmt.Sprintf("%d", jsonReq.Estimate.Estimate)
+				if jsonReq.Estimate != "" {
+					estimate = jsonReq.Estimate
 				}
 				if len(jsonReq.AssigneeIDs) > 0 {
 					assignee = jsonReq.AssigneeIDs[0]
@@ -360,10 +362,7 @@ func newTaskCreateCmd() *cobra.Command {
 				if err != nil {
 					return fmt.Errorf("invalid estimate: %w", err)
 				}
-				req.Estimate = &clockify.Estimate{
-					Type:     "AUTO",
-					Estimate: secs,
-				}
+				req.Estimate = clockify.FlexibleDuration(secs).ISO8601()
 			}
 
 			task, err := client.CreateTask(ctx, proj.ID, req)
@@ -377,7 +376,7 @@ func newTaskCreateCmd() *cobra.Command {
 	cmd.Flags().String("project", "", "project ID or name (required)")
 	cmd.Flags().String("name", "", "task name (required)")
 	cmd.Flags().String("estimate", "", "task estimate (seconds, or e.g. 1h, 1.5h, 30m)")
-	cmd.Flags().String("status", "", "task status: TODO, IN_PROGRESS, DONE")
+	cmd.Flags().String("status", "", "task status: ACTIVE, DONE (aliases: TODO, IN_PROGRESS)")
 	cmd.Flags().String("assignee", "", "assignee user ID, email, or name")
 	cmd.Flags().Bool("billable", false, "task is billable")
 	cmd.Flags().String("file", "", "JSON file with task data")
@@ -437,7 +436,7 @@ func newTaskUpdateCmd() *cobra.Command {
 
 			req := clockify.UpdateTaskRequest{
 				Name:        existing.Name,
-				Estimate:    existing.Estimate,
+				Estimate:    existing.Estimate.ISO8601(),
 				Status:      existing.Status,
 				AssigneeIDs: existing.AssigneeIDs,
 				IsBillable:  &existing.IsBillable,
@@ -465,7 +464,7 @@ func newTaskUpdateCmd() *cobra.Command {
 				if jsonReq.Name != "" {
 					req.Name = jsonReq.Name
 				}
-				if jsonReq.Estimate != nil {
+				if jsonReq.Estimate != "" {
 					req.Estimate = jsonReq.Estimate
 				}
 				if jsonReq.Status != "" {
@@ -491,10 +490,7 @@ func newTaskUpdateCmd() *cobra.Command {
 					if err != nil {
 						return fmt.Errorf("invalid estimate: %w", err)
 					}
-					req.Estimate = &clockify.Estimate{
-						Type:     "AUTO",
-						Estimate: secs,
-					}
+					req.Estimate = clockify.FlexibleDuration(secs).ISO8601()
 				}
 				if status != "" {
 					status, err = parseTaskStatus(status)
@@ -527,7 +523,7 @@ func newTaskUpdateCmd() *cobra.Command {
 	cmd.Flags().String("id", "", "task ID (required)")
 	cmd.Flags().String("name", "", "new task name")
 	cmd.Flags().String("estimate", "", "task estimate (seconds, or e.g. 1h, 1.5h, 30m)")
-	cmd.Flags().String("status", "", "task status: TODO, IN_PROGRESS, DONE")
+	cmd.Flags().String("status", "", "task status: ACTIVE, DONE (aliases: TODO, IN_PROGRESS)")
 	cmd.Flags().String("assignee", "", "assignee user ID, email, or name")
 	cmd.Flags().Bool("billable", false, "task is billable")
 	cmd.Flags().String("file", "", "JSON file with task data")
@@ -605,10 +601,16 @@ func newTaskDeleteCmd() *cobra.Command {
 
 func parseTaskStatus(s string) (string, error) {
 	normalized := strings.ToUpper(strings.ReplaceAll(strings.TrimSpace(s), "-", "_"))
-	if validTaskStatuses[normalized] {
+	if !validTaskStatuses[normalized] {
+		return "", fmt.Errorf("invalid status %q; must be one of: ACTIVE, DONE (aliases: TODO, IN_PROGRESS)", s)
+	}
+	// Clockify task write API only accepts ACTIVE/DONE/ALL.
+	switch normalized {
+	case "TODO", "IN_PROGRESS":
+		return "ACTIVE", nil
+	default:
 		return normalized, nil
 	}
-	return "", fmt.Errorf("invalid status %q; must be one of: TODO, IN_PROGRESS, DONE", s)
 }
 
 func resolveProjectRef(ctx context.Context, client *api.ClockifyClient, ref string) (*clockify.Project, error) {

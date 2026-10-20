@@ -237,7 +237,7 @@ func newProjectCreateCmd() *cobra.Command {
 				}
 				req.Estimate = &clockify.Estimate{
 					Type:     "AUTO",
-					Estimate: secs,
+					Estimate: clockify.FlexibleDuration(secs),
 				}
 			}
 

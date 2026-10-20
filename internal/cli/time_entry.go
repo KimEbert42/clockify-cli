@@ -175,7 +175,7 @@ func newTimeEntryListCmd() *cobra.Command {
 			for _, e := range entries {
 				dur := ""
 				if e.TimeInterval.Duration > 0 {
-					dur = duration.Format(e.TimeInterval.Duration)
+					dur = duration.Format(e.TimeInterval.Duration.Int64())
 				} else if e.TimeInterval.End == nil {
 					dur = "running"
 				}
@@ -692,7 +692,7 @@ func newTimeEntryStopCmd() *cobra.Command {
 
 			dur := ""
 			if updated.TimeInterval.Duration > 0 {
-				dur = duration.Format(updated.TimeInterval.Duration)
+				dur = duration.Format(updated.TimeInterval.Duration.Int64())
 			}
 
 			cmd.Printf("Timer stopped. Duration: %s\n", dur)

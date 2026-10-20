@@ -49,24 +49,24 @@ type UserProfile struct {
 }
 
 type Project struct {
-	ID              string        `json:"id" yaml:"id"`
-	Name            string        `json:"name" yaml:"name"`
-	ClientID        string        `json:"clientId" yaml:"clientId"`
-	WorkspaceID     string        `json:"workspaceId" yaml:"workspaceId"`
-	Billable        bool          `json:"billable" yaml:"billable"`
-	Status          string        `json:"status" yaml:"status"`
-	Archived        bool          `json:"archived" yaml:"archived"`
-	Duration        *int64        `json:"duration" yaml:"duration"`
-	Estimate        *Estimate     `json:"estimate" yaml:"estimate"`
-	ActiveTaskCount int           `json:"activeTaskCount" yaml:"activeTaskCount"`
-	Color           string        `json:"color" yaml:"color"`
-	NameSimilarTo   string        `json:"nameSimilarTo" yaml:"nameSimilarTo"`
-	Note            string        `json:"note" yaml:"note"`
+	ID              string           `json:"id" yaml:"id"`
+	Name            string           `json:"name" yaml:"name"`
+	ClientID        string           `json:"clientId" yaml:"clientId"`
+	WorkspaceID     string           `json:"workspaceId" yaml:"workspaceId"`
+	Billable        bool             `json:"billable" yaml:"billable"`
+	Status          string           `json:"status" yaml:"status"`
+	Archived        bool             `json:"archived" yaml:"archived"`
+	Duration        FlexibleDuration `json:"duration" yaml:"duration"`
+	Estimate        *Estimate        `json:"estimate" yaml:"estimate"`
+	ActiveTaskCount int              `json:"activeTaskCount" yaml:"activeTaskCount"`
+	Color           string           `json:"color" yaml:"color"`
+	NameSimilarTo   string           `json:"nameSimilarTo" yaml:"nameSimilarTo"`
+	Note            string           `json:"note" yaml:"note"`
 }
 
 type Estimate struct {
-	Type     string `json:"type" yaml:"type"`
-	Estimate int64  `json:"estimate" yaml:"estimate"`
+	Type     string            `json:"type" yaml:"type"`
+	Estimate FlexibleDuration  `json:"estimate" yaml:"estimate"`
 }
 
 type Client struct {
@@ -99,9 +99,10 @@ type TimeEntry struct {
 }
 
 type TimeInterval struct {
-	Start    time.Time  `json:"start" yaml:"start"`
-	End      *time.Time `json:"end" yaml:"end"`
-	Duration int64      `json:"duration" yaml:"duration"`
+	Start time.Time `json:"start" yaml:"start"`
+	End   *time.Time `json:"end" yaml:"end"`
+	// Duration is FlexibleDuration: number seconds on list, ISO-8601 string on create/update.
+	Duration FlexibleDuration `json:"duration" yaml:"duration"`
 }
 
 type PageInfo struct {
@@ -159,24 +160,26 @@ type Task struct {
 	ProjectID   string    `json:"projectId" yaml:"projectId"`
 	WorkspaceID string    `json:"workspaceId" yaml:"workspaceId"`
 	AssigneeIDs []string  `json:"assigneeIds" yaml:"assigneeIds"`
-	Estimate    *Estimate `json:"estimate" yaml:"estimate"`
-	Status      string    `json:"status" yaml:"status"`
-	IsBillable  bool      `json:"isBillable" yaml:"isBillable"`
-	Active      bool      `json:"active" yaml:"active"`
+	// Estimate accepts number seconds or ISO-8601 duration on read;
+	// Clockify task endpoints expect ISO-8601 on write.
+	Estimate   FlexibleDuration `json:"estimate" yaml:"estimate"`
+	Status     string           `json:"status" yaml:"status"`
+	IsBillable bool             `json:"isBillable" yaml:"isBillable"`
+	Active     bool             `json:"active" yaml:"active"`
 }
 
 type CreateTaskRequest struct {
-	Name        string    `json:"name"`
-	Estimate    *Estimate `json:"estimate,omitempty"`
-	Status      string    `json:"status,omitempty"`
-	AssigneeIDs []string  `json:"assigneeIds,omitempty"`
-	IsBillable  bool      `json:"isBillable,omitempty"`
+	Name        string   `json:"name"`
+	Estimate    string   `json:"estimate,omitempty"` // ISO-8601 duration e.g. PT2H
+	Status      string   `json:"status,omitempty"`
+	AssigneeIDs []string `json:"assigneeIds,omitempty"`
+	IsBillable  bool     `json:"isBillable,omitempty"`
 }
 
 type UpdateTaskRequest struct {
-	Name        string    `json:"name,omitempty"`
-	Estimate    *Estimate `json:"estimate,omitempty"`
-	Status      string    `json:"status,omitempty"`
-	AssigneeIDs []string  `json:"assigneeIds,omitempty"`
-	IsBillable  *bool     `json:"isBillable,omitempty"`
+	Name        string   `json:"name,omitempty"`
+	Estimate    string   `json:"estimate,omitempty"` // ISO-8601 duration e.g. PT2H
+	Status      string   `json:"status,omitempty"`
+	AssigneeIDs []string `json:"assigneeIds,omitempty"`
+	IsBillable  *bool    `json:"isBillable,omitempty"`
 }

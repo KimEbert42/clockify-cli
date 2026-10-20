@@ -228,13 +228,13 @@ func TestTaskCreateJSON(t *testing.T) {
 			if req.Name != "Design Phase" {
 				t.Errorf("expected name Design Phase, got %s", req.Name)
 			}
-			if req.Status != "TODO" {
-				t.Errorf("expected status TODO, got %s", req.Status)
+			if req.Status != "ACTIVE" {
+				t.Errorf("expected status ACTIVE (TODO maps to ACTIVE), got %s", req.Status)
 			}
-			if req.Estimate == nil || req.Estimate.Estimate != 3600 {
-				t.Errorf("expected estimate 3600, got %+v", req.Estimate)
+			if req.Estimate != "PT1H" {
+				t.Errorf("expected estimate PT1H, got %q", req.Estimate)
 			}
-			task := clockify.Task{ID: "t1", Name: req.Name, ProjectID: "p1", Status: req.Status, Estimate: req.Estimate, Active: true}
+			task := clockify.Task{ID: "t1", Name: req.Name, ProjectID: "p1", Status: req.Status, Estimate: 3600, Active: true}
 			w.Header().Set("Content-Type", "application/json")
 			json.NewEncoder(w).Encode(task)
 			return
@@ -272,7 +272,7 @@ func TestTaskCreateJSON(t *testing.T) {
 }
 
 func TestTaskCreateEstimateDurationFormat(t *testing.T) {
-	var gotEstimate int64
+	var gotEstimate string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		projects := []clockify.Project{{ID: "p1", Name: "Website"}}
 		if serveProject(w, r, projects) {
@@ -285,10 +285,10 @@ func TestTaskCreateEstimateDurationFormat(t *testing.T) {
 				http.Error(w, "bad request", http.StatusBadRequest)
 				return
 			}
-			if req.Estimate != nil {
-				gotEstimate = req.Estimate.Estimate
+			if req.Estimate != "" {
+				gotEstimate = req.Estimate
 			}
-			task := clockify.Task{ID: "t1", Name: req.Name, ProjectID: "p1", Estimate: req.Estimate, Active: true}
+			task := clockify.Task{ID: "t1", Name: req.Name, ProjectID: "p1", Estimate: 3600, Active: true}
 			w.Header().Set("Content-Type", "application/json")
 			json.NewEncoder(w).Encode(task)
 			return
@@ -313,8 +313,8 @@ func TestTaskCreateEstimateDurationFormat(t *testing.T) {
 		t.Fatalf("Execute() error = %v", err)
 	}
 
-	if gotEstimate != 3600 {
-		t.Errorf("expected estimate 3600 for 1h, got %d", gotEstimate)
+	if gotEstimate != "PT1H" {
+		t.Errorf("expected estimate PT1H for 1h, got %q", gotEstimate)
 	}
 }
 
