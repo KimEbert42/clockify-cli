@@ -192,6 +192,87 @@ func TestParseReportResponse(t *testing.T) {
 	}
 }
 
+// TestParseReportResponseLiveSummaryShape guards against the live Reports API
+// payload (captured 2026-10-20): groups under "groupOne", group duration and
+// amount at the group level, and "totals" as an array of aggregate objects
+// keyed totalTime/totalBillableTime/totalAmount.
+func TestParseReportResponseLiveSummaryShape(t *testing.T) {
+	body := []byte(`{
+		"donutChart": [],
+		"groupOne": [{
+			"_id": "p1", "name": "DevelopMint", "clientName": "DevelopMint",
+			"amount": 3660, "duration": 1464, "currency": "USD",
+			"amounts": [{"type": "EARNED", "value": 3660}]
+		}],
+		"groupTotals": {"groupOneTotalCount": 1},
+		"totals": [{
+			"_id": "", "entriesCount": 1, "numOfCurrencies": 1,
+			"totalAmount": 3660, "totalBillableTime": 1464, "totalTime": 1464
+		}]
+	}`)
+	resp, err := ParseReportResponse(body)
+	if err != nil {
+		t.Fatalf("ParseReportResponse error = %v", err)
+	}
+	if len(resp.Groups) != 1 || resp.Groups[0].Name != "DevelopMint" {
+		t.Fatalf("groups = %+v", resp.Groups)
+	}
+	g := resp.Groups[0]
+	if g.Totals == nil || g.Totals.Duration == nil || *g.Totals.Duration != 1464 {
+		t.Errorf("group totals duration = %+v, want 1464", g.Totals)
+	}
+	if g.Totals == nil || g.Totals.Amount == nil || *g.Totals.Amount != 3660 {
+		t.Errorf("group totals amount = %+v, want 3660", g.Totals)
+	}
+	if resp.Totals == nil || resp.Totals.Duration == nil || *resp.Totals.Duration != 1464 {
+		t.Errorf("totals totalTime not mapped: %+v", resp.Totals)
+	}
+	if resp.Totals == nil || resp.Totals.BillableDuration == nil || *resp.Totals.BillableDuration != 1464 {
+		t.Errorf("totals totalBillableTime not mapped: %+v", resp.Totals)
+	}
+	if resp.Totals == nil || resp.Totals.Amount == nil || *resp.Totals.Amount != 3660 {
+		t.Errorf("totals totalAmount not mapped: %+v", resp.Totals)
+	}
+}
+
+// TestParseReportResponseLiveWeeklyShape guards against the live weekly
+// payload: projects (groupOne) → users (children) → per-day rows (days),
+// each with a group-level duration.
+func TestParseReportResponseLiveWeeklyShape(t *testing.T) {
+	body := []byte(`{
+		"groupOne": [{
+			"_id": "p1", "name": "DevelopMint", "duration": 1464, "amount": 3660,
+			"children": [{
+				"_id": "u1", "name": "Kim Ebert", "duration": 1464, "amount": 3660,
+				"days": [
+					{"date": "2026-10-19", "duration": 0, "amount": 0},
+					{"date": "2026-10-20", "duration": 1464, "amount": 3660}
+				]
+			}]
+		}],
+		"totals": [{"totalTime": 1464, "totalBillableTime": 1464, "totalAmount": 3660}],
+		"totalsByDay": [{"date": "2026-10-20", "duration": 1464}]
+	}`)
+	resp, err := ParseReportResponse(body)
+	if err != nil {
+		t.Fatalf("ParseReportResponse error = %v", err)
+	}
+	if len(resp.Groups) != 1 {
+		t.Fatalf("groups = %+v", resp.Groups)
+	}
+	children := resp.Groups[0].Children
+	if len(children) != 1 || children[0].Name != "Kim Ebert" {
+		t.Fatalf("children = %+v", children)
+	}
+	days := children[0].Days
+	if len(days) != 2 {
+		t.Fatalf("days = %+v", days)
+	}
+	if days[1].Totals == nil || days[1].Totals.Duration == nil || *days[1].Totals.Duration != 1464 {
+		t.Errorf("day totals duration = %+v, want 1464", days[1].Totals)
+	}
+}
+
 func TestLooksLikePDF(t *testing.T) {
 	if !LooksLikePDF("application/pdf", []byte("%PDF-1.4")) {
 		t.Error("expected PDF detection by content-type")

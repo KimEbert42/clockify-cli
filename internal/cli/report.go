@@ -324,8 +324,10 @@ func runReport(kind string, requireEnd bool) func(cmd *cobra.Command, args []str
 				return err
 			}
 			req.SummaryFilter = &clockify.SummaryFilter{
-				Groups:           groups,
-				SummaryChartType: groups[0],
+				Groups: groups,
+				// The API only accepts PROJECT or BILLABILITY here,
+				// regardless of the chosen groups.
+				SummaryChartType: "PROJECT",
 			}
 		}
 		if kind == "detailed" {
@@ -347,6 +349,19 @@ func runReport(kind string, requireEnd bool) func(cmd *cobra.Command, args []str
 		// Merge any remaining file params that map onto known request fields
 		if fileParams != nil {
 			mergeReportFileParams(&req, fileParams)
+		}
+
+		// The API rejects weekly reports without both group and subgroup
+		// ("Both group and subgroup is required"), and only accepts
+		// group=PROJECT|USER with subgroup=TIME. Default to the weekly
+		// calendar layout after file params, so --file/--stdin can override.
+		if kind == "weekly" {
+			if req.WeeklyFilter.Group == "" {
+				req.WeeklyFilter.Group = "PROJECT"
+			}
+			if req.WeeklyFilter.Subgroup == "" {
+				req.WeeklyFilter.Subgroup = "TIME"
+			}
 		}
 
 		var body []byte
@@ -423,7 +438,7 @@ func parseReportGroups(raw string) ([]string, error) {
 	}
 	valid := map[string]bool{
 		"PROJECT": true, "CLIENT": true, "USER": true, "TASK": true,
-		"TAG": true, "DATE": true, "DESCRIPTION": true, "BILLABLE": true,
+		"TAG": true, "DATE": true,
 	}
 	var groups []string
 	seen := map[string]bool{}
@@ -433,7 +448,7 @@ func parseReportGroups(raw string) ([]string, error) {
 			continue
 		}
 		if !valid[g] {
-			return nil, fmt.Errorf("invalid group %q; must be one of: PROJECT, CLIENT, USER, TASK, TAG, DATE, DESCRIPTION, BILLABLE", g)
+			return nil, fmt.Errorf("invalid group %q; must be one of: PROJECT, CLIENT, USER, TASK, TAG, DATE", g)
 		}
 		if seen[g] {
 			continue
@@ -477,6 +492,14 @@ func mergeReportFileParams(req *clockify.ReportRequest, params map[string]any) {
 	}
 	if v, ok := params["dateRangeType"].(string); ok {
 		req.DateRangeType = v
+	}
+	if v, ok := params["weeklyFilter"].(map[string]any); ok && req.WeeklyFilter != nil {
+		if s, ok := v["group"].(string); ok && req.WeeklyFilter.Group == "" {
+			req.WeeklyFilter.Group = s
+		}
+		if s, ok := v["subgroup"].(string); ok && req.WeeklyFilter.Subgroup == "" {
+			req.WeeklyFilter.Subgroup = s
+		}
 	}
 }
 
@@ -578,7 +601,37 @@ func buildReportDisplays(kind string, resp *clockify.ReportResponse) ([]reportDi
 		}
 		return rows, headers
 
-	case "summary", "weekly":
+	case "weekly":
+		// Weekly payloads nest: projects (groupOne→groups) contain users
+		// (children), users contain per-day rows (days). Flatten to one
+		// row per project/user/day with tracked time.
+		var rows []reportDisplay
+		for _, p := range resp.Groups {
+			for _, u := range p.Children {
+				for _, d := range u.Days {
+					if d.Totals == nil || d.Totals.Duration == nil || *d.Totals.Duration == 0 {
+						continue
+					}
+					row := reportDisplay{Group: p.Name, User: u.Name, Date: d.Date,
+						Duration: duration.Format(*d.Totals.Duration)}
+					if d.Totals.Amount != nil && *d.Totals.Amount != 0 {
+						row.Amount = fmt.Sprintf("%.2f", *d.Totals.Amount)
+					}
+					rows = append(rows, row)
+				}
+			}
+		}
+		headers = []string{"GROUP", "USER", "DATE", "DURATION", "AMOUNT"}
+		if resp.Totals != nil && resp.Totals.Duration != nil {
+			row := reportDisplay{Group: "TOTAL", Duration: duration.Format(*resp.Totals.Duration)}
+			if resp.Totals.Amount != nil {
+				row.Amount = fmt.Sprintf("%.2f", *resp.Totals.Amount)
+			}
+			rows = append(rows, row)
+		}
+		return rows, headers
+
+	case "summary":
 		var rows []reportDisplay
 		groups := resp.Groups
 		if len(groups) == 0 {

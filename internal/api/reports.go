@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"maps"
 	"net/http"
 	"os"
 	"strings"
@@ -164,6 +165,8 @@ func ParseReportResponse(body []byte) (*clockify.ReportResponse, error) {
 		return nil, fmt.Errorf("invalid report response: %w", err)
 	}
 
+	normalizeReportPayload(raw)
+
 	typedJSON, err := json.Marshal(raw)
 	if err != nil {
 		return nil, err
@@ -174,6 +177,94 @@ func ParseReportResponse(body []byte) (*clockify.ReportResponse, error) {
 	}
 	resp.Raw = raw
 	return &resp, nil
+}
+
+// normalizeReportPayload adapts the live Clockify Reports API payload to the
+// shapes ReportResponse expects. The API returns:
+//   - summary groups under groupOne..groupFour (not "groups"),
+//   - group duration/amount at the group level (not under "totals"),
+//   - "totals" as an array of aggregates with totalTime/totalBillableTime/
+//     totalAmount keys.
+//
+// It mutates raw in place; ParseReportResponse calls it before typed unmarshal.
+func normalizeReportPayload(raw map[string]any) {
+	normalizeTotalsField(raw)
+
+	if _, ok := raw["groups"]; !ok {
+		var groups []any
+		for _, key := range []string{"groupOne", "groupTwo", "groupThree", "groupFour"} {
+			if g, ok := raw[key].([]any); ok {
+				groups = append(groups, g...)
+			}
+		}
+		if len(groups) > 0 {
+			raw["groups"] = groups
+		}
+	}
+
+	if gs, ok := raw["groups"].([]any); ok {
+		for _, g := range gs {
+			normalizeGroupDuration(g)
+		}
+	}
+}
+
+// normalizeGroupDuration promotes a group-level duration/amount into a
+// "totals" object and recurses into weekly-report children/day rows.
+func normalizeGroupDuration(g any) {
+	gm, ok := g.(map[string]any)
+	if !ok {
+		return
+	}
+	if _, has := gm["totals"]; !has {
+		if _, hasDur := gm["duration"]; hasDur {
+			gm["totals"] = normalizeTotals(maps.Clone(gm))
+		}
+	}
+	if children, ok := gm["children"].([]any); ok {
+		for _, c := range children {
+			normalizeGroupDuration(c)
+		}
+	}
+	if days, ok := gm["days"].([]any); ok {
+		for _, d := range days {
+			normalizeGroupDuration(d)
+		}
+	}
+}
+
+// normalizeTotals maps live aggregate keys (totalTime/totalBillableTime/
+// totalAmount) onto the typed duration/billableDuration/amount names,
+// passing through already-typed keys.
+func normalizeTotals(m map[string]any) map[string]any {
+	out := map[string]any{}
+	pick := func(dst string, keys ...string) {
+		for _, k := range keys {
+			if v, ok := m[k]; ok {
+				out[dst] = v
+				return
+			}
+		}
+	}
+	pick("duration", "totalTime", "duration")
+	pick("billableDuration", "totalBillableTime", "billableDuration")
+	pick("amount", "totalAmount", "amount")
+	return out
+}
+
+func normalizeTotalsField(m map[string]any) {
+	switch t := m["totals"].(type) {
+	case []any:
+		if len(t) > 0 {
+			if first, ok := t[0].(map[string]any); ok {
+				m["totals"] = normalizeTotals(first)
+				return
+			}
+		}
+		delete(m, "totals")
+	case map[string]any:
+		m["totals"] = normalizeTotals(t)
+	}
 }
 
 // LooksLikeCSV reports whether a response body/content-type indicates CSV export output.
